@@ -40,8 +40,43 @@ const RouterOutputZ = z.object({
   user_question_topic: z.string().min(1).nullable().default(null)
 }).strict();
 
+const RouterJsonSchema = {
+  name: "router_output",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      intent: { type: "string", enum: ["ANSWER_SLOT", "ASK_QUESTION_IN_SCOPE", "OFF_TOPIC", "META_FLOW"] },
+      confidence: { type: "number", minimum: 0, maximum: 1 },
+      user_question_topic: { type: ["string", "null"] },
+      profile_delta: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          businessPurpose: { type: ["string", "null"] },
+          businessOffer: { type: ["string", "null"] },
+          businessAdvantage: { type: ["string", "null"] },
+          businessGoals: { type: ["string", "null"] },
+          audienceDefinition: { type: ["string", "null"] },
+          audienceAge: { type: ["string", "null"] },
+          audienceLocation: { type: ["string", "null"] },
+          audienceProblem: { type: ["string", "null"] },
+          offerMonetization: { type: ["string", "null"] },
+          offerPricing: { type: ["string", "null"] },
+          offerExclusivity: { type: ["string", "null"] },
+          offerOptions: { type: ["string", "null"] }
+        },
+        required: [] // profile_delta can be empty object
+      }
+    },
+    required: ["intent", "confidence", "profile_delta", "user_question_topic"]
+  }
+};
+
 module.exports = {
   ProfileDeltaZ,
   RouterOutputZ,
+  RouterJsonSchema,
   /** @typedef {import("zod").infer<typeof RouterOutputZ>} RouterOutput */
 };
