@@ -52,12 +52,7 @@ export function AuthProvider({ children }) {
       setAuthenticated(true);
       setUser(res.data.user);
       console.log('User logged in:', res.data.user);
-      if (res.data.user.subscription && res.data.user.subscription.active) {
-        navigate('/');
-      }
-      else {
-        navigate('/pricing');
-      }
+      navigate('/');
     }).catch((error) => {
       console.error('Login error:', error);
       setError(error.response?.data?.message || 'Login failed. Please try again.');
@@ -70,16 +65,8 @@ export function AuthProvider({ children }) {
     checkAuth();
   }, [location]);
 
-  const updateUserSubscription = async (subJson) => {
-    if (!user || !user.id) return;
-    setUser((prevUser) => ({
-      ...prevUser,
-      subscription: subJson,
-    }));
-  };
-
   return (
-    <AuthContext.Provider value={{ user, authenticated, loading, login, logout, updateUserSubscription }}>
+    <AuthContext.Provider value={{ user, authenticated, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

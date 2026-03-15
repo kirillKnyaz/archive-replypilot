@@ -6,15 +6,10 @@ import ProtectedRoute from './ProtectedRoute';
 
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
-import DashboardPage from './pages/dashboard/DashboardPage';
-import OnboardingPage from './pages/onboarding/OnboardingPage';
-import { IntakeFormContext, IntakeFormProvider } from './context/IntakeFormContext';
-import PricingPage from './pages/billing/PricingPage';
-import PaymentSuccessfulPage from './pages/billing/PaymentSuccessfulPage';
-import PaymentCancelPage from './pages/billing/PaymentCancelPage';
-import BillingPage from './pages/billing/BillingPage';
-import { LeadProvider } from './context/LeadContext';
-import OnboardingChat from './pages/onboarding/OnboardingChatPage';
+import ReviewDashboard from './pages/dashboard/ReviewDashboard';
+import CampaignListPage from './pages/campaigns/CampaignListPage';
+import CampaignSetupPage from './pages/campaigns/CampaignSetupPage';
+import CampaignDetailPage from './pages/campaigns/CampaignDetailPage';
 
 export default function App() {
   return (
@@ -24,29 +19,11 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route element={<Layout />}>
-            <Route path="/" element={<ProtectedRoute>
-              <LeadProvider>
-                <IntakeFormProvider>
-                  <DashboardPage />
-                </IntakeFormProvider>
-              </LeadProvider>
-            </ProtectedRoute>} />
-            <Route path='/pricing' element={<PricingPage />} />
+            <Route path="/" element={<ProtectedRoute><ReviewDashboard /></ProtectedRoute>} />
 
-            <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />           
-            <Route path="/billing/success" element={<ProtectedRoute><PaymentSuccessfulPage /></ProtectedRoute>} />
-            <Route path="/billing/cancel" element={<ProtectedRoute><PaymentCancelPage /></ProtectedRoute>} />
-            
-            <Route
-              path="/onboarding"
-              element={
-                <ProtectedRoute>
-                  <IntakeFormProvider>
-                    <OnboardingChat/>
-                  </IntakeFormProvider>
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/campaigns" element={<ProtectedRoute><CampaignListPage /></ProtectedRoute>} />
+            <Route path="/campaigns/:id" element={<ProtectedRoute><CampaignDetailPage /></ProtectedRoute>} />
+            <Route path="/campaigns/:id/setup" element={<ProtectedRoute><CampaignSetupPage /></ProtectedRoute>} />
           </Route>
         </Routes>
       </AuthProvider>

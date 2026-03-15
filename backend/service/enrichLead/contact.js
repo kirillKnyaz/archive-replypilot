@@ -83,13 +83,13 @@ const enrichContact = async ({ userId, leadId }) => {
       facebook: scrapedData.facebook || lead.facebook,
       instagram: scrapedData.instagram || lead.instagram,
       tiktok: scrapedData.tiktok || lead.tiktok,
-      // track if contact info is complete
+      // contactComplete = true if ANY contact method is found
       contactComplete: !!(
-        (scrapedData.phone || lead.phone) 
-        && (scrapedData.email || lead.email) 
-        && (scrapedData.facebook || lead.facebook) 
-        && (scrapedData.instagram || lead.instagram) 
-        && (scrapedData.tiktok || lead.tiktok)
+        (scrapedData.phone || lead.phone)
+        || (scrapedData.email || lead.email)
+        || (scrapedData.facebook || lead.facebook)
+        || (scrapedData.instagram || lead.instagram)
+        || (scrapedData.tiktok || lead.tiktok)
       )
     },
     include: { sources: true }
@@ -100,10 +100,10 @@ const enrichContact = async ({ userId, leadId }) => {
     eval: {
       completed: !!(
         (scrapedData.phone || lead.phone)
-        && (scrapedData.email || lead.email)
-        && (scrapedData.facebook || lead.facebook)
-        && (scrapedData.instagram || lead.instagram)
-        && (scrapedData.tiktok || lead.tiktok)
+        || (scrapedData.email || lead.email)
+        || (scrapedData.facebook || lead.facebook)
+        || (scrapedData.instagram || lead.instagram)
+        || (scrapedData.tiktok || lead.tiktok)
       ),
       reason: 'Contact information enriched successfully'
     }

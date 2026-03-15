@@ -21,6 +21,7 @@
     "express": "^5.1.0",
     "google-search-results-nodejs": "^2.1.0",
     "jsonwebtoken": "^9.0.2",
+    "node-cron": "^4.2.1",
     "nodemon": "^3.1.10",
     "puppeteer": "^24.15.0",
     "puppeteer-extra": "^3.3.6",

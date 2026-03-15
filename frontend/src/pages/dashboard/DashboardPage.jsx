@@ -41,9 +41,7 @@ function DashboardPage() {
     }
 
     if (!loading && user) {
-      if (!user.profile) {
-        navigate('/onboarding'); // Redirect to onboarding if no profile data
-      }
+      // No onboarding gate — campaigns are the main flow now
     }
   }, [user, loading, authenticated]);
 

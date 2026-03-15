@@ -1,8 +1,8 @@
 // service/onboarding/answerer.js
 // GPT #2 used ONLY when intent === ASK_QUESTION_IN_SCOPE and required fields are known.
 
-const { OpenAI } = require("openai");
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const Anthropic = require("@anthropic-ai/sdk");
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 /**
  * @typedef {{ role: 'user'|'assistant', text: string }} Turn
@@ -60,16 +60,14 @@ async function answerer({ topic, profile, history = [] }) {
     rubric
   ].join("\n");
 
-  const resp = await openai.chat.completions.create({
-    model: process.env.ANSWERER_MODEL || "gpt-4o-mini",
-    temperature: 0.2,
-    messages: [
-      { role: "system", content: SYSTEM },
-      { role: "user", content: USER }
-    ]
+  const resp = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 512,
+    system: SYSTEM,
+    messages: [{ role: "user", content: USER }],
   });
 
-  const out = resp.choices?.[0]?.message?.content?.trim();
+  const out = resp.content?.[0]?.text?.trim();
   return out || "Here’s a concise recommendation based on what you’ve shared.";
 }
 

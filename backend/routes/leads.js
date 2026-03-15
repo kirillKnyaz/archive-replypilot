@@ -98,6 +98,28 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
+// PATCH /api/leads/:id/status — lightweight status update for review UI
+router.patch('/:id/status', async (req, res) => {
+  const userId = req.user.userId;
+  const leadId = req.params.id;
+  const { status } = req.body;
+
+  const allowed = ['CONTACTED', 'ARCHIVED', 'QUEUED', 'QUALIFIED'];
+  if (!status || !allowed.includes(status)) {
+    return res.status(400).json({ error: `Status must be one of: ${allowed.join(', ')}` });
+  }
+
+  try {
+    const lead = await prisma.lead.update({
+      where: { id: leadId, userId },
+      data: { status },
+    });
+    return res.json(lead);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update lead status', error: err.message });
+  }
+});
+
 router.patch('/:id/priority', async (req, res) => {
   const userId = req.user.userId;
   const leadId = req.params.id;

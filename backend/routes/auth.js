@@ -44,19 +44,8 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
     const user = await prisma.user.findUnique({
-      where: { email }, 
-      select: { 
-        id: true, 
-        email: true, 
-        password: true, 
-        profile: { 
-          select: { 
-            id: true, 
-            icpSummary: true
-          }
-        },
-        subscription: { select: { stripeId: true, tier: true, active: true } },
-      } 
+      where: { email },
+      select: { id: true, email: true, password: true },
     });
     if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
@@ -75,7 +64,7 @@ router.post('/login', async (req, res) => {
       // domain: '.yourdomain.com', // (optional) set in prod if needed
     });
 
-    res.json({ token: token, user: { id: user.id, email: user.email, profile: user.profile, subscription: user.subscription } });
+    res.json({ token, user: { id: user.id, email: user.email } });
   } catch (err) {
     res.status(500).json({ message: 'Login failed', error: err.message});
   }
@@ -88,12 +77,7 @@ router.get('/me', authenticate, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
-      select: { 
-        id: true, 
-        email: true, 
-        profile: {select: {id: true, icpSummary: true}}, 
-        subscription: true 
-      },
+      select: { id: true, email: true },
     });
     res.json(user);
   } catch {
