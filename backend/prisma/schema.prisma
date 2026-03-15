@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,257 +8,233 @@ datasource db {
 }
 
 model User {
-  id              String          @id @default(uuid())
-  email           String          @unique
-  password        String
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  profile         UserProfile?
-  subscription    Subscription?
-  leads           Lead[]
-  messages        Message[]
-  searchResults   SearchResult[]
-  lists           List[]
-  onboardingFlows OnboardingFlow[]
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  campaigns     Campaign[]
+  leads         Lead[]
+  messages      Message[]
+  searchResults SearchResult[]
+  lists         List[]
 }
 
-model UserProfile {
-  id                 String    @id @default(uuid())
-  userId             String    @unique
-  user               User      @relation(fields: [userId], references: [id])
+model Campaign {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // json summary of ICP  
-  icpSummary         Json?     
+  name          String
+  vertical      String        // e.g. "restaurants", "hair salons"
+  location      String        // e.g. "Bristol, UK"
+  locationLat   Float?
+  locationLng   Float?
+  radiusMeters  Int           @default(5000)
 
-  // db fields to curate as we goal
-  // understanding the business
-  businessPurpose    String? 
-  businessOffer      String?
-  businessAdvantage  String?
-  businessGoals      String?
+  offer         String        // what you're pitching to this vertical
+  angle         String?       // the specific problem you're solving for them
+  qualifier     String?       // what makes a business a BAD fit (to filter out)
+  tone          String?       // casual / professional / direct
 
-  // understanding the audience
-  audienceDefinition String?
-  audienceAge        String?
-  audienceLocation   String?
-  audienceProblem    String?
+  voiceExamples String[]      // example messages to guide Claude's style
 
-  // understanding the offer
-  offerMonetization  String? // eg.  one-time, subscription
-  offerPricing       String?
-  offerExclusivity   String?
-  offerOptions       String?
+  active        Boolean       @default(false)
+  dailyTarget   Int           @default(15)
+  setupComplete Boolean       @default(false)
 
-  businessComplete   Boolean   @default(false)
-  audienceComplete   Boolean   @default(false)
-  offerComplete      Boolean   @default(false)
+  leads         Lead[]
+  runs          CampaignRun[]
 
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt @default(now())
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([userId, active])
 }
 
-enum RiskTolerance {
-  LOW
-  MEDIUM
-  HIGH
+model CampaignRun {
+  id               String    @id @default(cuid())
+  campaignId       String
+  campaign         Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  runAt            DateTime  @default(now())
+  leadsDiscovered  Int       @default(0)
+  leadsFiltered    Int       @default(0)
+  leadsQueued      Int       @default(0)
+  status           RunStatus @default(RUNNING)
+  errorMessage     String?
+
+  @@index([campaignId, runAt])
 }
 
-enum TonePreference {
-  CASUAL
-  PROFESSIONAL
-  BOLD
-  CAREFUL
+enum RunStatus {
+  RUNNING
+  COMPLETE
+  ERROR
 }
 
-model OnboardingFlow {
-  id          String    @id @default(uuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-
-  step        String    // question index
-  question    String
-  answer      String?    
-  metadata    Json?     // e.g. confidence score, source
-
-  createdAt   DateTime  @default(now())
-}
-
-model Subscription {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id])
-  stripeId          String   @unique
-  tier              String
-  active            Boolean
-  cancel_at_period_end Boolean @default(false)
-  current_period_end Int
-  ended_at          DateTime?
-  status            String   
-  searchTokens      Int @default(0)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @default(now())
+enum LeadStatus {
+  DISCOVERED
+  ENRICHED
+  QUALIFIED
+  QUEUED
+  CONTACTED
+  ARCHIVED
 }
 
 model Lead {
-  id            String   @id @default(cuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id])    
-  mapsUri       String?
-  placesId      String?  @unique
-  location      String
-  priority      Priority @default(MEDIUM)
+  id                String     @id @default(cuid())
+  userId            String
+  user              User       @relation(fields: [userId], references: [id])
+  campaignId        String?
+  campaign          Campaign?  @relation(fields: [campaignId], references: [id])
 
-  name          String
-  type          String?
-  description   String?
-  keywords      String[] // from GPT
+  mapsUri           String?
+  placesId          String?    @unique
+  location          String
 
-  // Contact info fields
-  website       String?
-  email         String?
-  phone         String?
+  status            LeadStatus @default(DISCOVERED)
+
+  name              String
+  type              String?
+  description       String?
+  keywords          String[]
+
+  // Contact info
+  website           String?
+  email             String?
+  phone             String?
 
   // Socials
-  instagram     String?
-  facebook      String?
-  tiktok        String?
+  instagram         String?
+  facebook          String?
+  tiktok            String?
 
-  // Workflow flags
-  identityComplete Boolean @default(false)
-  contactComplete  Boolean @default(false)
-  socialComplete   Boolean @default(false)
+  // Enrichment state
+  identityComplete  Boolean    @default(false)
+  contactComplete   Boolean    @default(false)
+  socialComplete    Boolean    @default(false)
+  noContactFound    Boolean    @default(false)
+  inactiveSuspected Boolean    @default(false)
 
-  messages      Message[]
-  sources       LeadSource[]
-  logs          LeadEnrichmentLog[]
-  lists         LeadList[]
+  // Campaign fit (from Claude evaluation)
+  icpFitScore       Float?
+  icpFitReason      String?
+  generatedMessage  String?
+
+  messages          Message[]
+  sources           LeadSource[]
+  logs              LeadEnrichmentLog[]
+  lists             LeadList[]
 }
 
-// lead lists here
 model List {
   id        String     @id @default(cuid())
   userId    String
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   name      String
-  color     String?    // optional hex or token like "indigo"
+  color     String?
 
   items     LeadList[]
 
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
-  // Prevent duplicate list names per user; remove if you want duplicates
   @@unique([userId, name])
   @@index([userId, createdAt])
 }
 
 model LeadList {
   id        String   @id @default(cuid())
-
   listId    String
   leadId    String
-
-  // For custom ordering within a list; nullable if you don't care yet
   position  Float?
-
   createdAt DateTime @default(now())
 
   list      List     @relation(fields: [listId], references: [id], onDelete: Cascade)
   lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
-  // Don’t allow the same lead twice in the same list
   @@unique([listId, leadId])
   @@index([leadId])
 }
 
 model LeadSource {
-  id         String         @id @default(uuid())
-  leadId     String
-  lead       Lead           @relation(fields: [leadId], references: [id])
-  goal       SourceGoal     
-  type       SourceType
-  url        String
+  id     String     @id @default(uuid())
+  leadId String
+  lead   Lead       @relation(fields: [leadId], references: [id])
+  goal   SourceGoal
+  type   SourceType
+  url    String
 }
 
 model LeadEnrichmentLog {
-  id         String           @id @default(uuid())
-  leadId     String
-  userId     String
-  goal       SourceGoal
-  step       EnrichmentStep
-  status     EnrichmentStatus
-  message    String?
-  attempt    Int              @default(1)
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  id        String           @id @default(uuid())
+  leadId    String
+  userId    String
+  goal      SourceGoal
+  step      EnrichmentStep
+  status    EnrichmentStatus
+  message   String?
+  attempt   Int              @default(1)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 
-  lead       Lead             @relation(fields: [leadId], references: [id])
+  lead      Lead             @relation(fields: [leadId], references: [id])
 }
 
 model Message {
-  id         String         @id @default(uuid())
-  userId     String
-  user       User           @relation(fields: [userId], references: [id])
-  leadId     String
-  lead       Lead           @relation(fields: [leadId], references: [id])
-  content    String
-  sentAt     DateTime       @default(now())
-  method     MessageType    
-  status     MessageStatus  @default(PENDING)
-  reply      Reply?
+  id      String        @id @default(uuid())
+  userId  String
+  user    User          @relation(fields: [userId], references: [id])
+  leadId  String
+  lead    Lead          @relation(fields: [leadId], references: [id])
+  content String
+  sentAt  DateTime      @default(now())
+  method  MessageType
+  status  MessageStatus @default(PENDING)
+  reply   Reply?
 
   @@index([userId, leadId])
 }
 
 model Reply {
-  id         String         @id @default(uuid())
-  messageId  String         @unique
-  message    Message        @relation(fields: [messageId], references: [id])
-  content    String
-  repliedAt  DateTime       @default(now())
-  sentiment  Sentiment
-  category   ReplyCategory
-}
-
-// schema.prisma
-enum SearchType {
-  NEARBY
-  TEXT
+  id        String        @id @default(uuid())
+  messageId String        @unique
+  message   Message       @relation(fields: [messageId], references: [id])
+  content   String
+  repliedAt DateTime      @default(now())
+  sentiment Sentiment
+  category  ReplyCategory
 }
 
 model SearchResult {
-  id              String    @id @default(cuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String     @id @default(cuid())
+  userId         String
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  type            SearchType
-  centerLat       Float
-  centerLng       Float
-  radiusMeters    Int
+  type           SearchType
+  centerLat      Float
+  centerLng      Float
+  radiusMeters   Int
 
-  // one of the two depending on type
-  category        String?
-  textQuery       String?
+  category       String?
+  textQuery      String?
 
-  maxResultCount  Int
-  placesCount     Int
-  tokensCharged   Int       @default(0)
+  maxResultCount Int
+  placesCount    Int
+  tokensCharged  Int        @default(0)
+  results        Json
 
-  // raw Google Places response payload you care about
-  results         Json
-
-  createdAt       DateTime  @default(now())
+  createdAt      DateTime   @default(now())
 
   @@index([userId, createdAt])
   @@index([type, createdAt])
 }
 
-enum Priority {
-  CERTAIN
-  HIGH
-  MEDIUM
-  LOW
+enum SearchType {
+  NEARBY
+  TEXT
 }
 
 enum MessageType {
