@@ -65,47 +65,26 @@ app.post("/api/billing/webhook", express.raw({ type: "application/json" }), asyn
     }
   }
 
-  // Handle token allocation for checkout completion
-  if (event.type === 'checkout.session.completed') {
+  if (event.type === 'checkout.session.completed' || event.type === 'invoice.payment_succeeded' || event.type === 'invoice.paid') {
     const session = event.data.object;
-    const userId = session.metadata?.userId;
+    const userId = session.metadata.userId;
+
+    // Optional: fetch subscription details to determine tier
     const subscriptionId = session.subscription;
+    const stripeSub = await stripe.subscriptions.retrieve(subscriptionId);
+    const dbSub = await prisma.subscription.findUnique({
+      where: { stripeId: subscriptionId },
+      select: { tier: true }
+    });
 
-    if (userId && subscriptionId) {
-      const dbSub = await prisma.subscription.findUnique({
-        where: { stripeId: subscriptionId },
-        select: { tier: true }
-      });
+    const tokenAmount = getTokenAmountForTier(dbSub.tier); // 👇
 
-      if (dbSub) {
-        const tokenAmount = getTokenAmountForTier(dbSub.tier);
-        await prisma.subscription.update({
-          where: { userId },
-          data: { searchTokens: tokenAmount },
-        });
-      }
-    }
-  }
-
-  // Handle token refresh on invoice payment (subscription renewals)
-  if (event.type === 'invoice.payment_succeeded' || event.type === 'invoice.paid') {
-    const invoice = event.data.object;
-    const subscriptionId = invoice.subscription;
-
-    if (subscriptionId) {
-      const dbSub = await prisma.subscription.findUnique({
-        where: { stripeId: subscriptionId },
-        select: { userId: true, tier: true }
-      });
-
-      if (dbSub) {
-        const tokenAmount = getTokenAmountForTier(dbSub.tier);
-        await prisma.subscription.update({
-          where: { userId: dbSub.userId },
-          data: { searchTokens: tokenAmount },
-        });
-      }
-    }
+    await prisma.subscription.update({
+      where: { userId },
+      data: {
+        searchTokens: tokenAmount,
+      },
+    });
   }
 
   if (event.type === 'customer.subscription.updated') {
