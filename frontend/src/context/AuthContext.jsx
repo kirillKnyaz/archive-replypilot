@@ -56,7 +56,7 @@ export function AuthProvider({ children }) {
         navigate('/');
       }
       else {
-        navigate('/pricing', { state: { message: 'Please select a subscription plan to continue.' } });
+        navigate('/pricing');
       }
     }).catch((error) => {
       console.error('Login error:', error);

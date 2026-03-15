@@ -11,22 +11,22 @@ const { z } = require("zod");
 // Profile delta limited to your 12 fields (plus future-proof icpSummary optional)
 const ProfileDeltaZ = z.object({
   // understanding the business
-  businessPurpose:    z.string().optional().nullable(),
-  businessOffer:      z.string().optional().nullable(),
-  businessAdvantage:  z.string().optional().nullable(),
-  businessGoals:      z.string().optional().nullable(),
+  businessPurpose:    z.string().min(1).optional().nullable(),
+  businessOffer:      z.string().min(1).optional().nullable(),
+  businessAdvantage:  z.string().min(1).optional().nullable(),
+  businessGoals:      z.string().min(1).optional().nullable(),
 
   // understanding the audience
-  audienceDefinition: z.string().optional().nullable(),
-  audienceAge:        z.string().optional().nullable(),      // keep string (e.g., "25–45", "18+")
-  audienceLocation:   z.string().optional().nullable(),
-  audienceProblem:    z.string().optional().nullable(),
+  audienceDefinition: z.string().min(1).optional().nullable(),
+  audienceAge:        z.string().min(1).optional().nullable(),      // keep string (e.g., "25–45", "18+")
+  audienceLocation:   z.string().min(1).optional().nullable(),
+  audienceProblem:    z.string().min(1).optional().nullable(),
 
   // understanding the offer
-  offerMonetization:  z.string().optional().nullable(),      // e.g., "subscription", "one-time"
-  offerPricing:       z.string().optional().nullable(),
-  offerExclusivity:   z.string().optional().nullable(),
-  offerOptions:       z.string().optional().nullable(),
+  offerMonetization:  z.string().min(1).optional().nullable(),      // e.g., "subscription", "one-time"
+  offerPricing:       z.string().min(1).optional().nullable(),
+  offerExclusivity:   z.string().min(1).optional().nullable(),
+  offerOptions:       z.string().min(1).optional().nullable(),
 
   // we do NOT let the model set *Complete flags directly
   // icpSummary is produced by summarizer; router shouldn't fill it
@@ -36,7 +36,7 @@ const ProfileDeltaZ = z.object({
 const RouterOutputZ = z.object({
   intent: z.enum(["ANSWER_SLOT", "ASK_QUESTION_IN_SCOPE", "OFF_TOPIC", "META_FLOW"]),
   confidence: z.number().min(0).max(1),
-  profile_delta: ProfileDeltaZ,
+  profile_delta: ProfileDeltaZ.default({}),
   user_question_topic: z.string().min(1).nullable().default(null)
 }).strict();
 

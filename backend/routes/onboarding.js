@@ -32,25 +32,20 @@ function isFilled(v) {
 }
 
 // Merge profile_delta directly into columns we allow
-function buildColumnUpdate(delta, existingProfile) {
+function buildColumnUpdate(delta) {
   console.log("BUILDING COLUMN UPDATE:", JSON.stringify(delta));
   if (!delta) return {};
+  const allowed = new Set([
+    ...CATEGORIES.business,
+    ...CATEGORIES.audience,
+    ...CATEGORIES.offer
+  ]);
 
-  const allowed = new Set([...CATEGORIES.business, ...CATEGORIES.audience, ...CATEGORIES.offer]);
   const out = {};
-
   for (const [k, v] of Object.entries(delta)) {
     if (!allowed.has(k)) continue;
-
-    if (v === null || v === undefined || v === "") {
-      // skip instead of wiping good data
-      continue;
-    }
-
-    const trimmed = typeof v === "string" ? v.trim() : v;
-    if (trimmed !== existingProfile[k]) {
-      out[k] = trimmed;
-    }
+    if (v === null || v === undefined) { out[k] = null; continue; }
+    out[k] = typeof v === "string" ? v.trim() : v;
   }
   return out;
 }
@@ -125,16 +120,11 @@ router.post('/answer', async (req, res) => {
   let userProfile = await prisma.userProfile.findUnique({ where: { userId } });
   if (!userProfile) userProfile = await prisma.userProfile.create({ data: { userId } });
 
-  const history = await prisma.onboardingFlow.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    take: 6
-  }).then(turns => turns.reverse()); // oldest → newest
-
+  // This is your single GPT call for the turn
   const routed = await routeAndExtract({
-    userMessage: answer.trim(),
+    userMessage: typeof answer === "string" ? answer.trim() : answer,
     profile: userProfile,
-    history
+    history: [] // plug your conversation turns if you keep them
   });
 
   console.log("ROUTED:", JSON.stringify(routed));

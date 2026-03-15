@@ -5,7 +5,7 @@
 // Returns strict JSON per ../../schemas/routerSchema.js
 
 const { OpenAI } = require("openai");
-const { RouterOutputZ, RouterJsonSchema } = require("../../schemas/routerSchema");
+const { RouterOutputZ } = require("../../schemas/routerSchema");
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 /**
@@ -35,14 +35,11 @@ async function routeAndExtract({ userMessage, profile, history = [] }) {
     .map(t => `${t.role === "user" ? "User" : "Assistant"}: ${String(t.text ?? "").trim()}`)
     .join("\n");
 
-  console.log("[Router] history:", history, "trimmedTurns:", trimmedTurns);
-
   const SYSTEM = [
     "You are a routing + extraction module for a guided onboarding chat.",
     "Return STRICT JSON ONLY that matches the provided JSON schema.",
     "Intents: ANSWER_SLOT | ASK_QUESTION_IN_SCOPE | OFF_TOPIC | META_FLOW.",
-    "If you classify as ANSWER_SLOT, extract ONLY these fields when explicitly present and unambiguous:",
-    "If there are relevant fields extracted, format them in profile_delta; if you classify as ANSWER_SLOT, profile_delta must be non-empty.",
+    "Extract ONLY these fields when explicitly present and unambiguous:",
     "businessPurpose, businessOffer, businessAdvantage, businessGoals,",
     "audienceDefinition, audienceAge, audienceLocation, audienceProblem,",
     "offerMonetization, offerPricing, offerExclusivity, offerOptions.",
@@ -59,27 +56,20 @@ async function routeAndExtract({ userMessage, profile, history = [] }) {
     "\n=== NEW USER MESSAGE ===",
     msg,
     "\n=== TASK ===",
-    "Return STRICT JSON conforming to the JSON schema:",
-    JSON.stringify({
-      intent: "ANSWER_SLOT | ASK_QUESTION_IN_SCOPE | OFF_TOPIC | META_FLOW",
-      confidence: "float 0–1",
-      profile_delta: {
-        businessPurpose: "string|null",
-        businessOffer: "string|null",
-        businessAdvantage: "string|null",
-        businessGoals: "string|null",
-        audienceDefinition: "string|null",
-        audienceAge: "string|null",
-        audienceLocation: "string|null",
-        audienceProblem: "string|null",
-        offerMonetization: "string|null",
-        offerPricing: "string|null",
-        offerExclusivity: "string|null",
-        offerOptions: "string|null"
-      },
-      user_question_topic: "string|null"
-    }, null, 2)
+    "Return STRICT JSON conforming to the JSON schema."
   ].join("\n");
+
+  // Prefer json_schema when available; otherwise json_object
+  const useJsonSchema = process.env.ROUTER_USE_JSON_SCHEMA === "1";
+  const response_format = useJsonSchema
+    ? {
+        // Uncomment when you export RouterJsonSchema:
+        // type: "json_schema",
+        // json_schema: RouterJsonSchema,
+        // Temporary fallback until you wire the JSON schema object:
+        type: "json_object"
+      }
+    : { type: "json_object" };
 
   const resp = await openai.chat.completions.create({
     model: process.env.ROUTER_MODEL || "gpt-4o-mini",
@@ -88,20 +78,15 @@ async function routeAndExtract({ userMessage, profile, history = [] }) {
       { role: "system", content: SYSTEM },
       { role: "user", content: USER_BLOCK }
     ],
-    response_format: {
-      type: "json_object"
-    }
+    response_format
   });
 
   const raw = resp.choices?.[0]?.message?.content ?? "{}";
-  console.log("[Router] raw response:", raw);
   let parsed;
   try { parsed = JSON.parse(raw); } catch { parsed = {}; }
 
-
   const safe = RouterOutputZ.safeParse(parsed);
   if (!safe.success) {
-    console.error("[Router] Validation error:", safe.error.format());
     // Minimal safe fallback to keep the loop alive
     return {
       intent: "ANSWER_SLOT",
