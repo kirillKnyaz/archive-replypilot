@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import API from "../../api";
 
 export default function ReviewDashboard() {
@@ -118,7 +118,11 @@ function LeadCard({ lead, copied, onCopy, onContacted, onArchive }) {
         {/* Header row */}
         <div className="d-flex justify-content-between align-items-start mb-2">
           <div>
-            <h6 className="mb-0">{lead.name}</h6>
+            <h6 className="mb-0">
+              <Link to={`/leads/${lead.id}`} className="text-decoration-none text-dark">
+                {lead.name}
+              </Link>
+            </h6>
             <small className="text-muted">
               {lead.type && `${lead.type} · `}
               {lead.location}
@@ -150,6 +154,9 @@ function LeadCard({ lead, copied, onCopy, onContacted, onArchive }) {
                 Map
               </a>
             )}
+            <Link to={`/leads/${lead.id}`} className="btn btn-sm btn-outline-secondary">
+              View
+            </Link>
           </div>
         </div>
 

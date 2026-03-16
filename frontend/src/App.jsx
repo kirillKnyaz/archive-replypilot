@@ -10,6 +10,7 @@ import ReviewDashboard from './pages/dashboard/ReviewDashboard';
 import CampaignListPage from './pages/campaigns/CampaignListPage';
 import CampaignSetupPage from './pages/campaigns/CampaignSetupPage';
 import CampaignDetailPage from './pages/campaigns/CampaignDetailPage';
+import LeadPage from './pages/leads/LeadPage';
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
             <Route path="/campaigns" element={<ProtectedRoute><CampaignListPage /></ProtectedRoute>} />
             <Route path="/campaigns/:id" element={<ProtectedRoute><CampaignDetailPage /></ProtectedRoute>} />
             <Route path="/campaigns/:id/setup" element={<ProtectedRoute><CampaignSetupPage /></ProtectedRoute>} />
+            <Route path="/leads/:id" element={<ProtectedRoute><LeadPage /></ProtectedRoute>} />
           </Route>
         </Routes>
       </AuthProvider>

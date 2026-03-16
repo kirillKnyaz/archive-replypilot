@@ -9,6 +9,9 @@ export default function CampaignDetailPage() {
   const [runs, setRuns] = useState([]);
   const [tab, setTab] = useState("leads");
   const [statusFilter, setStatusFilter] = useState("");
+  const [editingConfig, setEditingConfig] = useState(false);
+  const [configFields, setConfigFields] = useState({});
+  const [configSaving, setConfigSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Live run state
@@ -138,6 +141,32 @@ export default function CampaignDetailPage() {
     }
   }
 
+  function startEditing() {
+    setConfigFields({
+      vertical: campaign.vertical || "",
+      location: campaign.location || "",
+      offer: campaign.offer || "",
+      angle: campaign.angle || "",
+      qualifier: campaign.qualifier || "",
+      tone: campaign.tone || "",
+      dailyTarget: campaign.dailyTarget ?? 10,
+    });
+    setEditingConfig(true);
+  }
+
+  async function saveConfig() {
+    setConfigSaving(true);
+    try {
+      const { data } = await API.patch(`/campaigns/${id}`, configFields);
+      setCampaign(data);
+      setEditingConfig(false);
+    } catch (e) {
+      console.error("Failed to save config", e);
+    } finally {
+      setConfigSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="container py-4">
@@ -204,21 +233,110 @@ export default function CampaignDetailPage() {
         </div>
       </div>
 
-      {/* Config summary */}
-      <div className="card card-body mb-3" style={{ fontSize: "0.85rem" }}>
-        <div className="row">
-          <div className="col-md-6">
-            <strong>Angle:</strong> {campaign.angle || "—"}
-            <br />
-            <strong>Qualifier:</strong> {campaign.qualifier || "—"}
+      {/* Config summary / edit */}
+      {editingConfig ? (
+        <div className="card card-body mb-3">
+          <div className="row g-2" style={{ fontSize: "0.9rem" }}>
+            <div className="col-md-6">
+              <label className="form-label fw-semibold mb-1">Vertical</label>
+              <input
+                className="form-control form-control-sm"
+                value={configFields.vertical}
+                onChange={(e) => setConfigFields((p) => ({ ...p, vertical: e.target.value }))}
+              />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label fw-semibold mb-1">Location</label>
+              <input
+                className="form-control form-control-sm"
+                value={configFields.location}
+                onChange={(e) => setConfigFields((p) => ({ ...p, location: e.target.value }))}
+              />
+            </div>
+            <div className="col-12">
+              <label className="form-label fw-semibold mb-1">Offer</label>
+              <input
+                className="form-control form-control-sm"
+                value={configFields.offer}
+                onChange={(e) => setConfigFields((p) => ({ ...p, offer: e.target.value }))}
+              />
+            </div>
+            <div className="col-12">
+              <label className="form-label fw-semibold mb-1">Angle</label>
+              <textarea
+                className="form-control form-control-sm"
+                rows={2}
+                value={configFields.angle}
+                onChange={(e) => setConfigFields((p) => ({ ...p, angle: e.target.value }))}
+              />
+            </div>
+            <div className="col-12">
+              <label className="form-label fw-semibold mb-1">Qualifier <small className="text-muted fw-normal">(bad fit signals)</small></label>
+              <textarea
+                className="form-control form-control-sm"
+                rows={2}
+                value={configFields.qualifier}
+                onChange={(e) => setConfigFields((p) => ({ ...p, qualifier: e.target.value }))}
+              />
+            </div>
+            <div className="col-md-6">
+              <label className="form-label fw-semibold mb-1">Tone</label>
+              <select
+                className="form-select form-select-sm"
+                value={configFields.tone}
+                onChange={(e) => setConfigFields((p) => ({ ...p, tone: e.target.value }))}
+              >
+                <option value="">— select —</option>
+                <option value="casual">Casual</option>
+                <option value="professional">Professional</option>
+                <option value="direct">Direct</option>
+              </select>
+            </div>
+            <div className="col-md-6">
+              <label className="form-label fw-semibold mb-1">Daily target</label>
+              <input
+                type="number"
+                className="form-control form-control-sm"
+                min={1}
+                max={100}
+                value={configFields.dailyTarget}
+                onChange={(e) => setConfigFields((p) => ({ ...p, dailyTarget: Number(e.target.value) }))}
+              />
+            </div>
           </div>
-          <div className="col-md-6">
-            <strong>Tone:</strong> {campaign.tone || "—"}
-            <br />
-            <strong>Daily target:</strong> {campaign.dailyTarget}
+          <div className="d-flex gap-2 mt-3">
+            <button className="btn btn-sm btn-primary" onClick={saveConfig} disabled={configSaving}>
+              {configSaving ? "Saving..." : "Save"}
+            </button>
+            <button className="btn btn-sm btn-outline-secondary" onClick={() => setEditingConfig(false)}>
+              Cancel
+            </button>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="card card-body mb-3" style={{ fontSize: "0.85rem" }}>
+          <div className="d-flex justify-content-between align-items-start">
+            <div className="row flex-grow-1">
+              <div className="col-md-6">
+                <strong>Angle:</strong> {campaign.angle || "—"}
+                <br />
+                <strong>Qualifier:</strong> {campaign.qualifier || "—"}
+              </div>
+              <div className="col-md-6">
+                <strong>Tone:</strong> {campaign.tone || "—"}
+                <br />
+                <strong>Daily target:</strong> {campaign.dailyTarget}
+              </div>
+            </div>
+            <button
+              className="btn btn-sm btn-outline-secondary ms-3 flex-shrink-0"
+              onClick={startEditing}
+            >
+              Edit config
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Live run panel */}
       {(running || runEvents.length > 0) && (
@@ -474,7 +592,9 @@ function LeadRow({ lead }) {
     <div className="card">
       <div className="card-body py-2 d-flex justify-content-between align-items-center">
         <div>
-          <strong>{lead.name}</strong>
+          <Link to={`/leads/${lead.id}`} className="text-decoration-none text-dark fw-semibold">
+            {lead.name}
+          </Link>
           <small className="text-muted ms-2">
             {lead.type && `${lead.type} · `}
             {lead.location}

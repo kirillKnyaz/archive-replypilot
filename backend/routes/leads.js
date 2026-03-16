@@ -250,6 +250,41 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+router.get('/:id', async (req, res) => {
+  const userId = req.user.userId;
+  const leadId = req.params.id;
+
+  try {
+    const lead = await prisma.lead.findFirst({
+      where: { id: leadId, userId },
+      include: {
+        campaign: { select: { id: true, name: true, vertical: true, offer: true } },
+        sources: true,
+      },
+    });
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+    res.json(lead);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch lead', error: err.message });
+  }
+});
+
+router.patch('/:id/message', async (req, res) => {
+  const userId = req.user.userId;
+  const leadId = req.params.id;
+  const { generatedMessage } = req.body;
+
+  try {
+    const lead = await prisma.lead.update({
+      where: { id: leadId, userId },
+      data: { generatedMessage },
+    });
+    return res.json(lead);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update message', error: err.message });
+  }
+});
+
 router.get('/generateQuery', async (req, res) => {
   const userId = req.user.userId;
 
