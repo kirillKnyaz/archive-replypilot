@@ -18,6 +18,59 @@ model User {
   messages      Message[]
   searchResults SearchResult[]
   lists         List[]
+  profile       UserProfile?
+  subscription  Subscription?
+}
+
+model UserProfile {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Business fields
+  businessPurpose    String?
+  businessOffer      String?
+  businessAdvantage  String?
+  businessGoals      String?
+
+  // Audience fields
+  audienceDefinition String?
+  audienceAge        String?
+  audienceLocation   String?
+  audienceProblem    String?
+
+  // Offer fields
+  offerMonetization  String?
+  offerPricing       String?
+  offerExclusivity   String?
+  offerOptions       String?
+
+  // Completion flags
+  businessComplete   Boolean  @default(false)
+  audienceComplete   Boolean  @default(false)
+  offerComplete      Boolean  @default(false)
+
+  profileData        Json?
+  icpSummary         Json?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Subscription {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  stripeId           String   @unique
+  status             String   @default("active")
+  active             Boolean  @default(true)
+  cancel_at_period_end Boolean @default(false)
+  current_period_end Int?
+  searchTokens       Int      @default(0)
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model Campaign {
@@ -79,6 +132,8 @@ enum LeadStatus {
   QUALIFIED
   QUEUED
   CONTACTED
+  REPLIED
+  WON
   ARCHIVED
 }
 

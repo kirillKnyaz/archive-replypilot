@@ -61,12 +61,21 @@ export function AuthProvider({ children }) {
     });
   };
 
+  const register = async (email, password) => {
+    const res = await API.post('/auth/register', { email, password });
+    localStorage.setItem('token', res.data.token);
+    const meRes = await API.get('/auth/me');
+    setUser(meRes.data);
+    setAuthenticated(true);
+    navigate('/pricing');
+  };
+
   useEffect(() => {
     checkAuth();
   }, [location]);
 
   return (
-    <AuthContext.Provider value={{ user, authenticated, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, authenticated, loading, login, logout, register }}>
       {children}
     </AuthContext.Provider>
   );

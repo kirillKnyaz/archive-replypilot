@@ -32,6 +32,17 @@ router.post('/register', async (req, res) => {
       data: { email, password: hashed },
     });
 
+    // Auto-provision free tier subscription
+    await prisma.subscription.create({
+      data: {
+        userId: user.id,
+        stripeId: `free_${user.id}`,
+        status: 'active',
+        active: true,
+        searchTokens: 50,
+      },
+    });
+
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token });
   } catch (err) {
@@ -52,14 +63,14 @@ router.post('/login', async (req, res) => {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1d' });
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
 
     // 3) Send it as an HTTP-only cookie
     res.cookie('access_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // must be true on HTTPS in prod
-      sameSite: 'lax', // if FE and BE are on different top-level domains, use 'none'
-      maxAge: 1000 * 60 * 60, // 1 hour
+      secure: true,
+      sameSite: 'none', // cross-origin (vercel.app → railway.app)
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       path: '/',              // send cookie to all routes
       // domain: '.yourdomain.com', // (optional) set in prod if needed
     });
@@ -77,7 +88,14 @@ router.get('/me', authenticate, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
-      select: { id: true, email: true },
+      select: {
+        id: true,
+        email: true,
+        profile: true,
+        subscription: {
+          select: { id: true, active: true, status: true, searchTokens: true },
+        },
+      },
     });
     res.json(user);
   } catch {

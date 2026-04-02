@@ -37,7 +37,7 @@ function PricingPage() {
   const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
   const navigate = useNavigate();
   const location = useLocation();
-  const { locationMessage } = location.state.message || {};
+  const { locationMessage } = location.state?.message || {};
 
   console.log(location)
 

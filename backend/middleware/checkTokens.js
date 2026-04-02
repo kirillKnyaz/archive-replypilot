@@ -2,8 +2,7 @@ const prisma = require('../lib/prisma.js');
 
 async function authorizeTokens(req, res, next) {
   const user = req.user; // Assuming user is set by a previous middleware
-  console.log(user)
-  const { requestedTokens } = req.query || 10; // Default to 10 tokens if not specified
+  const requestedTokens = parseInt(req.query.requestedTokens) || 10;
 
   //check if user has a subscription and if the search tokens are avaliable
   const subscription = await prisma.subscription.findUnique({

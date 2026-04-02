@@ -8,7 +8,7 @@ const prisma = require("../lib/prisma");
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const PLACES_KEY = process.env.GOOGLE_MAPS_KEY;
-const FIELDS = "places.displayName,places.websiteUri,places.location,places.id,places.googleMapsUri,places.addressComponents,places.businessStatus";
+const FIELDS = "places.displayName,places.websiteUri,places.location,places.id,places.googleMapsUri,places.addressComponents,places.businessStatus,places.nationalPhoneNumber,places.internationalPhoneNumber";
 
 /**
  * Generate 2-3 Google Places text search queries from campaign config.
@@ -176,6 +176,7 @@ async function createLeadsFromPlaces(campaign, places) {
           placesId: p.id,
           mapsUri: p.googleMapsUri || null,
           website: p.websiteUri || null,
+          phone: p.nationalPhoneNumber || p.internationalPhoneNumber || null,
           status: "DISCOVERED",
         },
       });
@@ -204,9 +205,25 @@ function formatAddress(components) {
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
+/**
+ * Fetch fresh details for a single place by its Places ID.
+ * Returns nationalPhoneNumber, internationalPhoneNumber, websiteUri.
+ */
+async function fetchPlaceDetails(placeId) {
+  const url = `https://places.googleapis.com/v1/places/${placeId}`;
+  const { data } = await axios.get(url, {
+    headers: {
+      "X-Goog-Api-Key": PLACES_KEY,
+      "X-Goog-FieldMask": "nationalPhoneNumber,internationalPhoneNumber,websiteUri",
+    },
+  });
+  return data;
+}
+
 module.exports = {
   discoverPlaces,
   createLeadsFromPlaces,
   generateSearchQueries,
   geocodeLocation,
+  fetchPlaceDetails,
 };

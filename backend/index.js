@@ -14,6 +14,63 @@ app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true,
 }));
+// Stripe webhook — must use raw body before express.json() parses it
+const Stripe = require('stripe');
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+const prisma = require('./lib/prisma');
+
+app.post('/api/billing/webhook',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+      console.error('[stripe] Webhook signature verification failed:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    try {
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
+        const userId = session.metadata.userId;
+        const subscriptionId = session.subscription;
+        await prisma.subscription.upsert({
+          where: { userId },
+          create: { userId, stripeId: subscriptionId, status: 'active', active: true },
+          update: { stripeId: subscriptionId, status: 'active', active: true },
+        });
+      }
+
+      if (event.type === 'customer.subscription.updated') {
+        const sub = event.data.object;
+        await prisma.subscription.updateMany({
+          where: { stripeId: sub.id },
+          data: {
+            status: sub.status,
+            active: sub.status === 'active',
+            cancel_at_period_end: sub.cancel_at_period_end,
+            current_period_end: sub.current_period_end,
+          },
+        });
+      }
+
+      if (event.type === 'customer.subscription.deleted') {
+        const sub = event.data.object;
+        await prisma.subscription.updateMany({
+          where: { stripeId: sub.id },
+          data: { status: 'canceled', active: false },
+        });
+      }
+    } catch (err) {
+      console.error('[stripe] Webhook handler error:', err.message);
+    }
+
+    res.json({ received: true });
+  }
+);
+
 app.use(express.json());
 
 // Routes
@@ -22,6 +79,9 @@ app.use('/api/leads', authenticate, require('./routes/leads'));
 app.use('/api/search', authenticate, require('./routes/search'));
 app.use('/api/lists', authenticate, require('./routes/lists'));
 app.use('/api/campaigns', authenticate, require('./routes/campaigns'));
+app.use('/api/onboarding', authenticate, require('./routes/onboarding'));
+app.use('/api/billing', authenticate, require('./routes/billing'));
+app.use('/api/admin', authenticate, require('./routes/admin'));
 
 // Daily campaign runs at 6am
 cron.schedule('0 6 * * *', async () => {

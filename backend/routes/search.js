@@ -1,8 +1,9 @@
 const router = require('express').Router();
 const prisma = require('../lib/prisma.js');
 const axios = require('axios');
+const authorizeTokens = require('../middleware/checkTokens');
 
-router.get('/nearby', async (req, res) => {
+router.get('/nearby', authorizeTokens, async (req, res) => {
   const userId = req.user.userId;
   const { lat, lng, radius, category, requestedTokens } = req.query;
 
@@ -51,7 +52,7 @@ router.get('/nearby', async (req, res) => {
   });
 });
 
-router.get('/text', async (req, res) => {
+router.get('/text', authorizeTokens, async (req, res) => {
   const userId = req.user.userId;
   const { lat, lng, radius, query, requestedTokens } = req.query;
 

@@ -8,6 +8,7 @@ const z = require('zod');
 const { generateTextSearchQueryFromICP } = require('../service/gpt');
 const { enrichIdentity } = require('../service/enrichLead/identity');
 const { enrichContact } = require('../service/enrichLead/contact');
+const { fetchPlaceDetails } = require('../service/searchPlaces');
 
 // all fields optional
 const leadManual = z.object({
@@ -37,6 +38,26 @@ router.get('/:id/enrichmentLog/:goal', async (req, res) => {
   } catch (err) {
     console.log('Error fetching enrichment logs:', err);
     res.status(500).json({ message: 'Failed to fetch enrichment logs', error: err.message });
+  }
+});
+
+router.patch('/bulk-status', async (req, res) => {
+  const userId = req.user.userId;
+  const { ids, status } = req.body;
+
+  const allowed = ['CONTACTED', 'REPLIED', 'WON', 'ARCHIVED', 'QUEUED', 'QUALIFIED'];
+  if (!status || !allowed.includes(status) || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'Invalid request' });
+  }
+
+  try {
+    await prisma.lead.updateMany({
+      where: { id: { in: ids }, userId },
+      data: { status },
+    });
+    res.json({ updated: ids.length });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to bulk update status', error: err.message });
   }
 });
 
@@ -104,7 +125,7 @@ router.patch('/:id/status', async (req, res) => {
   const leadId = req.params.id;
   const { status } = req.body;
 
-  const allowed = ['CONTACTED', 'ARCHIVED', 'QUEUED', 'QUALIFIED'];
+  const allowed = ['CONTACTED', 'REPLIED', 'WON', 'ARCHIVED', 'QUEUED', 'QUALIFIED'];
   if (!status || !allowed.includes(status)) {
     return res.status(400).json({ error: `Status must be one of: ${allowed.join(', ')}` });
   }
@@ -225,6 +246,34 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.delete('/bulk', async (req, res) => {
+  const userId = req.user.userId;
+  const { ids } = req.body;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'ids array required' });
+  }
+
+  try {
+    const owned = await prisma.lead.findMany({
+      where: { id: { in: ids }, userId },
+      select: { id: true },
+    });
+    const ownedIds = owned.map(l => l.id);
+
+    await prisma.$transaction([
+      prisma.leadSource.deleteMany({ where: { leadId: { in: ownedIds } } }),
+      prisma.leadList.deleteMany({ where: { leadId: { in: ownedIds } } }),
+      prisma.leadEnrichmentLog.deleteMany({ where: { leadId: { in: ownedIds } } }),
+      prisma.lead.deleteMany({ where: { id: { in: ownedIds } } }),
+    ]);
+
+    return res.status(204).send();
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to bulk delete leads', error: err.message });
+  }
+});
+
 // routes/leads.js (delete route)
 router.delete('/:id', async (req, res) => {
   const userId = req.user.userId;
@@ -302,6 +351,43 @@ router.get('/generateQuery', async (req, res) => {
   }
 })
 
+// POST /api/leads/:id/rescrape
+// Step 1: pull fresh phone/website from Google Places.
+// Step 2: re-run website contact scrape to pick up email/facebook.
+router.post('/:id/rescrape', async (req, res) => {
+  const userId = req.user.userId;
+  const leadId = req.params.id;
+
+  const lead = await prisma.lead.findFirst({ where: { id: leadId, userId } });
+  if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+  // Step 1 — Google Places refresh
+  if (lead.placesId) {
+    try {
+      const place = await fetchPlaceDetails(lead.placesId);
+      const phone = place.nationalPhoneNumber || place.internationalPhoneNumber || null;
+      const updates = {};
+      if (phone) updates.phone = phone;
+      if (place.websiteUri && !lead.website) updates.website = place.websiteUri;
+      if (Object.keys(updates).length > 0) {
+        await prisma.lead.update({ where: { id: leadId }, data: updates });
+      }
+    } catch (e) {
+      console.error('[rescrape] Places fetch failed:', e.message);
+    }
+  }
+
+  // Step 2 — website contact scrape (email, facebook)
+  try {
+    await enrichContact({ userId, leadId });
+  } catch (e) {
+    console.error('[rescrape] Contact scrape failed:', e.message);
+  }
+
+  const updated = await prisma.lead.findFirst({ where: { id: leadId, userId } });
+  return res.json(updated);
+});
+
 router.post('/:id/enrich/identity', async (req, res) => {
   const userId = req.user.userId;
   const leadId = req.params.id;
@@ -334,21 +420,6 @@ router.post('/:id/enrich/contact', async (req, res) => {
   }
 })
 
-router.post('/:id/enrich/social', async (req, res) => {
-  const userId = req.user.userId;
-  const leadId = req.params.id;
-
-  try {
-    const updatedLead = await enrichSocial({
-      userId,
-      leadId,
-    });
-
-    return res.json({ updatedLead });
-  } catch (error) {
-    return res.status(500).json({ message: 'Failed to enrich social', error: error.message });
-  }
-})
 
 router.get('/:id/enrich/status/:goal', async (req, res) => {
   const userId = req.user.userId;

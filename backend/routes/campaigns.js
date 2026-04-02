@@ -38,6 +38,14 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ error: "Campaign name is required" });
   }
 
+  // Enforce campaign limit for free tier
+  const campaignCount = await prisma.campaign.count({ where: { userId } });
+  const sub = await prisma.subscription.findUnique({ where: { userId } });
+  const maxCampaigns = sub?.stripeId?.startsWith("free_") ? 3 : 50;
+  if (campaignCount >= maxCampaigns) {
+    return res.status(403).json({ error: `Campaign limit reached (${maxCampaigns})` });
+  }
+
   const campaign = await prisma.campaign.create({
     data: {
       userId,
@@ -79,7 +87,17 @@ router.get("/:id", async (req, res) => {
     include: { _count: { select: { leads: true, runs: true } } },
   });
   if (!campaign) return res.status(404).json({ error: "Campaign not found" });
-  res.json(campaign);
+
+  // Status counts for the campaign header
+  const statusCounts = await prisma.lead.groupBy({
+    by: ['status'],
+    where: { campaignId: campaign.id },
+    _count: true,
+  });
+  const stats = {};
+  for (const row of statusCounts) stats[row.status] = row._count;
+
+  res.json({ ...campaign, stats });
 });
 
 // PATCH /api/campaigns/:id — update fields (activate/pause, edit config)

@@ -35,8 +35,6 @@ function UserMenu() {
     >
       {user && <span className='text-muted small ps-4 mb-3'>: {user.email}</span>}
       <Link className='w-100 menu-link p-1 ps-4 m-0 text-decoration-none text-dark' to={"/"}>Dashboard</Link>
-      <Link className='w-100 menu-link p-1 ps-4 m-0 text-decoration-none text-dark'>Profile</Link>
-      <Link className='w-100 menu-link p-1 ps-4 m-0 text-decoration-none text-dark' to={"/onboarding"}>Onboarding</Link>
       <Link className='w-100 menu-link p-1 ps-4 m-0 text-decoration-none text-dark' to={"/billing"}>Billing</Link>
 
       <button className='btn btn-outline-danger m-3' type='button' onClick={() => logout('Logged out successfully')}>

@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import API from '../../api';
-import { data, Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
+import useAuth from '../../hooks/useAuth';
 
 function RegisterPage() {
-  const [register, setRegister] = useState({
+  const { register: authRegister } = useAuth();
+  const [formData, setFormData] = useState({
     email: '',
     password: '',
     confirmPassword: ''
   });
 
   function handleSetRegisterField(field, value) {
-    setRegister(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => ({ ...prev, [field]: value }));
     setRegisterError('');
   }
 
@@ -22,15 +24,15 @@ function RegisterPage() {
   const navigate = useNavigate();
 
   const handleEmailBlur = async () => {
-    if (!register.email) return;
-    if (!/\S+@\S+\.\S+/.test(register.email)) return;
+    if (!formData.email) return;
+    if (!/\S+@\S+\.\S+/.test(formData.email)) return;
 
     try {
-      const res = await API.get('/auth/exists', { params: { email: register.email } });
+      const res = await API.get('/auth/exists', { params: { email: formData.email } });
       if (res.data.exists) {        
         navigate('/login', { 
           state: { 
-            redirectEmail: register.email,
+            redirectEmail: formData.email,
             redirectMessage: 'User already exists, please login.'
           } 
         });
@@ -44,21 +46,18 @@ function RegisterPage() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (!register.email || !register.password || !register.confirmPassword) {
+    if (!formData.email || !formData.password || !formData.confirmPassword) {
       setRegisterError('Email and password are required');
       return;
     }
-    if (register.password !== register.confirmPassword) {
+    if (formData.password !== formData.confirmPassword) {
       setRegisterError('Passwords do not match');
       return;
     }
 
     try {
-      const res = await API.post('/auth/register', { email: register.email, password: register.password });
-      localStorage.setItem('token', res.data.token);
-      navigate('/');
+      await authRegister(formData.email, formData.password);
     } catch (error) {
-      console.error('Registration error:', error);
       setRegisterError(error.response?.data?.message || 'Registration failed');
     }
   };
@@ -71,7 +70,7 @@ function RegisterPage() {
         type="email"
         className="form-control my-2"
         placeholder="Email"
-        value={register.email}
+        value={formData.email}
         onChange={(e) => {
           handleSetRegisterField('email', e.target.value);
         }}
@@ -82,7 +81,7 @@ function RegisterPage() {
           type={showPassword ? "text" : "password"}
           className="form-control"
           placeholder="Password"
-          value={register.password}
+          value={formData.password}
           onChange={(e) => {
             handleSetRegisterField('password', e.target.value);
           }}
@@ -96,7 +95,7 @@ function RegisterPage() {
           type={showPassword ? "text" : "password"}
           className="form-control"
           placeholder="Confirm Password"
-          value={register.confirmPassword}
+          value={formData.confirmPassword}
           onChange={(e) => {
             handleSetRegisterField('confirmPassword', e.target.value);
           }}
