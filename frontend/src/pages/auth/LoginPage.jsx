@@ -66,7 +66,6 @@ function LoginPage() {
         </button>
       </div>
 
-      <Link className="mb-3 align-self-start ms-1 text-decoration-none">forgot password?</Link>
 
       <button type='submit' className="btn btn-primary w-100">Login</button>
       {loginMessage && <div className="text-danger mt-2 ms-1 align-self-start">{loginMessage}</div>}

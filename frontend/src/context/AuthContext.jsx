@@ -1,5 +1,5 @@
 import { createContext, useCallback, useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import API from '../api';
 
 export const AuthContext = createContext();
@@ -9,7 +9,6 @@ export function AuthProvider({ children }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const location = useLocation();
 
   const logout = (logoutMessage = 'Logged out successfully') => {
     localStorage.removeItem('token');
@@ -47,18 +46,20 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async (email, password, setError, setLoading) => {
-    API.post('/auth/login', { email, password }).then((res) => {
+    try {
+      const res = await API.post('/auth/login', { email, password });
       localStorage.setItem('token', res.data.token);
+      const meRes = await API.get('/auth/me');
+      setUser(meRes.data);
       setAuthenticated(true);
-      setUser(res.data.user);
-      console.log('User logged in:', res.data.user);
+      console.log('User logged in:', meRes.data);
       navigate('/');
-    }).catch((error) => {
+    } catch (error) {
       console.error('Login error:', error);
       setError(error.response?.data?.message || 'Login failed. Please try again.');
-    }).finally(() => {
+    } finally {
       if (setLoading) setLoading(false);
-    });
+    }
   };
 
   const register = async (email, password) => {
@@ -72,7 +73,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     checkAuth();
-  }, [location]);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, authenticated, loading, login, logout, register }}>

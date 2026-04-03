@@ -1,10 +1,6 @@
 const router = require('express').Router();
-const { PrismaClient } = require('@prisma/client')
-const prisma = new PrismaClient();
-// import zod
+const prisma = require('../lib/prisma.js');
 const z = require('zod');
-
-// const prisma = require('../lib/prisma.js');
 const { generateTextSearchQueryFromICP } = require('../service/gpt');
 const { enrichIdentity } = require('../service/enrichLead/identity');
 const { enrichContact } = require('../service/enrichLead/contact');

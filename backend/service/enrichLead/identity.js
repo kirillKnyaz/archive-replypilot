@@ -10,6 +10,7 @@ const enrichIdentity = async ({ userId, leadId }) => {
   const logId = await startEnrichmentStep({userId, leadId, goal: 'IDENTITY', step: 'GET_LEAD'});
   const lead = await prisma.lead.findUnique({
     where: { id: leadId, userId: userId },
+    include: { sources: true },
   });
 
   if (!lead) {

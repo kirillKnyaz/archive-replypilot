@@ -22,6 +22,14 @@ const noop = () => {};
  * @param {(event: { type: string, data: object }) => void} onProgress
  */
 async function runCampaign(campaign, onProgress = noop) {
+  const missing = ['vertical', 'location', 'offer', 'userId'].filter((f) => !campaign[f]);
+  if (missing.length > 0) {
+    const err = `Campaign is missing required fields: ${missing.join(', ')}`;
+    console.error(`[runner] ${err}`);
+    onProgress({ type: 'error', data: { error: err } });
+    return { error: err };
+  }
+
   console.log(`[runner] Starting run for campaign "${campaign.name}" (${campaign.id})`);
 
   const run = await prisma.campaignRun.create({

@@ -1,8 +1,6 @@
 // routes/lists.js
 const router = require('express').Router();
-// const prisma = require('../lib/prisma.js');
-const { PrismaClient } = require('@prisma/client')
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma.js');
 
 // Create a new list
 router.post('/', async (req, res) => {

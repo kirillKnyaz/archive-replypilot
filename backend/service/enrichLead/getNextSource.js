@@ -93,31 +93,15 @@ const getNextSource = async (lead, goal) => {
       }
       
       // if no website was found, look for facebook, then instagram, then tiktok
-      switch (url) {
-        case url.includes('facebook.com'):
-          if (!foundFlags.facebook) {
-            await updateEnrichmentStep(logId, 'SUCCESS', `Found Facebook source: ${url}`);
-            return { url: url, type: 'SOCIAL' };
-          }
-          break;
-        case url.includes('instagram.com'):
-          if (!foundFlags.instagram) {
-            await updateEnrichmentStep(logId, 'SUCCESS', `Found Instagram source: ${url}`);
-            return { url: url, type: 'SOCIAL' };
-          }
-          break;
-        case url.includes('tiktok.com'):
-          if (!foundFlags.tiktok) {
-            await updateEnrichmentStep(logId, 'SUCCESS', `Found TikTok source: ${url}`);
-            return { url: url, type: 'SOCIAL' };
-          }
-          break;
-        default:
-          // if no social media was found, return null
-          {
-            await updateEnrichmentStep(logId, 'ERROR', `No valid social media found for URL: ${url}`);
-            return { url: null, type: null };
-          }
+      if (url.includes('facebook.com') && !foundFlags.facebook) {
+        await updateEnrichmentStep(logId, 'SUCCESS', `Found Facebook source: ${url}`);
+        return { url: url, type: 'SOCIAL' };
+      } else if (url.includes('instagram.com') && !foundFlags.instagram) {
+        await updateEnrichmentStep(logId, 'SUCCESS', `Found Instagram source: ${url}`);
+        return { url: url, type: 'SOCIAL' };
+      } else if (url.includes('tiktok.com') && !foundFlags.tiktok) {
+        await updateEnrichmentStep(logId, 'SUCCESS', `Found TikTok source: ${url}`);
+        return { url: url, type: 'SOCIAL' };
       }
     }
   }

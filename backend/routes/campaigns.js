@@ -240,21 +240,56 @@ router.get("/:id/run/status", async (req, res) => {
 
 // ── Campaign Leads + Runs ──
 
-// GET /api/campaigns/:id/leads — leads for a campaign, optionally filtered by status
+// GET /api/campaigns/:id/leads — paginated, filtered, sorted leads for a campaign
 router.get("/:id/leads", async (req, res) => {
   const campaign = await prisma.campaign.findFirst({
     where: { id: req.params.id, userId: req.user.userId },
   });
   if (!campaign) return res.status(404).json({ error: "Campaign not found" });
 
-  const where = { campaignId: campaign.id };
-  if (req.query.status) where.status = req.query.status;
+  const {
+    page = 0, limit = 20,
+    sortBy = "icpFitScore", sortDir = "desc",
+    name, status, scoreFilter,
+    emailFilter, phoneFilter, facebookFilter, mapsFilter,
+  } = req.query;
 
-  const leads = await prisma.lead.findMany({
-    where,
-    orderBy: { id: "desc" },
-  });
-  res.json(leads);
+  const where = { campaignId: campaign.id };
+
+  if (name)   where.name   = { contains: name, mode: "insensitive" };
+  if (status) where.status = status;
+
+  if      (scoreFilter === "has")   where.icpFitScore = { not: null };
+  else if (scoreFilter === "empty") where.icpFitScore = null;
+  else if (["4","6","8"].includes(scoreFilter)) where.icpFitScore = { gte: Number(scoreFilter) };
+
+  if      (emailFilter === "has")   where.email = { not: null };
+  else if (emailFilter === "empty") where.email = null;
+
+  if      (phoneFilter === "has")   where.phone = { not: null };
+  else if (phoneFilter === "empty") where.phone = null;
+
+  if      (facebookFilter === "has")   where.facebook = { not: null };
+  else if (facebookFilter === "empty") where.facebook = null;
+
+  if      (mapsFilter === "has")   where.mapsUri = { not: null };
+  else if (mapsFilter === "empty") where.mapsUri = null;
+
+  const SORT_MAP = { name: "name", status: "status", score: "icpFitScore", email: "email", phone: "phone", facebook: "facebook", maps: "mapsUri" };
+  const orderByField = SORT_MAP[sortBy] || "icpFitScore";
+  const dir = sortDir === "asc" ? "asc" : "desc";
+
+  const [leads, total] = await Promise.all([
+    prisma.lead.findMany({
+      where,
+      orderBy: { [orderByField]: dir },
+      skip: Number(page) * Number(limit),
+      take: Number(limit),
+    }),
+    prisma.lead.count({ where }),
+  ]);
+
+  res.json({ leads, total });
 });
 
 // GET /api/campaigns/:id/runs — run history for a campaign

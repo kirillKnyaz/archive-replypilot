@@ -148,7 +148,7 @@ const scrapeSourceForContact = async (url, type, lead) => {
   });
 
   const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'networkidle2' });
+  await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
   await tryClosePopups(page);
 
   // Extract all anchor hrefs
