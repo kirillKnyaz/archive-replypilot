@@ -1,7 +1,6 @@
 const router = require('express').Router();
 const prisma = require('../lib/prisma.js');
 const z = require('zod');
-const { generateTextSearchQueryFromICP } = require('../service/gpt');
 const { enrichIdentity } = require('../service/enrichLead/identity');
 const { enrichContact } = require('../service/enrichLead/contact');
 const { fetchPlaceDetails } = require('../service/searchPlaces');
@@ -330,22 +329,6 @@ router.patch('/:id/message', async (req, res) => {
   }
 });
 
-router.get('/generateQuery', async (req, res) => {
-  const userId = req.user.userId;
-
-  const profile = await prisma.userProfile.findUnique({ where: { userId } });
-  if (!profile?.icpSummary) {
-    return res.status(400).json({ error: 'No ICP summary found' });
-  }
-
-  try {
-    const query = await generateTextSearchQueryFromICP(profile.icpSummary);
-    res.json({ query });
-  } catch (err) {
-    console.error('Error generating search query:', err);
-    res.status(500).json({ error: 'Failed to generate search query' });
-  }
-})
 
 // POST /api/leads/:id/rescrape
 // Step 1: pull fresh phone/website from Google Places.

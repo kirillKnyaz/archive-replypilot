@@ -91,7 +91,6 @@ router.get('/me', authenticate, async (req, res) => {
       select: {
         id: true,
         email: true,
-        profile: true,
         subscription: {
           select: { id: true, active: true, status: true, searchTokens: true },
         },

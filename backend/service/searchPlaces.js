@@ -63,8 +63,13 @@ async function placesTextSearch({ query, lat, lng, radius }) {
     };
   }
 
-  const response = await axios.post(url, body);
-  return response.data.places || [];
+  try {
+    const response = await axios.post(url, body);
+    return response.data.places || [];
+  } catch (e) {
+    console.error(`[places] Text search failed for "${query}":`, e.response?.data?.error?.message || e.message);
+    return [];
+  }
 }
 
 /**

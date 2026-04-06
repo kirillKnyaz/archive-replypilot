@@ -5,7 +5,7 @@ async function generateTextSearchQueryFromCampaign({ vertical, location, offer }
   const prompt = `You're a sales strategist. Generate 1 Google Places text search query to find ${vertical} businesses in ${location} that might need: ${offer}. Return only the search query string, nothing else.`;
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-4-6-20250514',
     max_tokens: 100,
     messages: [{ role: 'user', content: prompt }],
   });

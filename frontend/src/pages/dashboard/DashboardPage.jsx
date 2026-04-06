@@ -1,13 +1,12 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState } from "react";
 import useAuth from "../../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import LeadSidebar from "../../components/leads/LeadSidebar";
 import LeadDetails from "../../components/leads/LeadDetails";
 import DiscoverLeadsMap from "../../components/leads/DiscoverLeadsMap";
-import OnboardingPage from "../onboarding/OnboardingPage";
 
 function DashboardPage() {
-  const { loading, authenticated, user } = useAuth();
+  const { loading, authenticated } = useAuth();
   const navigate = useNavigate();
 
   const [toggle, setToggle] = useState(0);
@@ -35,15 +34,9 @@ function DashboardPage() {
   });
 
   useEffect(() => {
-    if (loading) return; // Wait until loading is complete
-    if (!authenticated) {
-      navigate('/login'); // Redirect to login if not authenticated
-    }
-
-    if (!loading && user) {
-      // No onboarding gate — campaigns are the main flow now
-    }
-  }, [user, loading, authenticated]);
+    if (loading) return;
+    if (!authenticated) navigate('/login');
+  }, [loading, authenticated]);
 
   return (
     <div className="d-flex vh-100 w-100 overflow-hidden position-relative">
@@ -64,7 +57,7 @@ function DashboardPage() {
         <div className="p-3">
           {toggle === 0 && <LeadDetails />}
           {toggle === 1 && <DiscoverLeadsMap discovery={discovery} setDiscovery={setDiscovery} />}
-          {toggle === 2 && <OnboardingPage />}
+          {toggle === 2 && <p className="text-muted">Settings coming soon.</p>}
         </div>
       </main>
       <div className="h-100">
