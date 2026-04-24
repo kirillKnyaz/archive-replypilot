@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import LeadSidebar from "../../components/leads/LeadSidebar";
 import LeadDetails from "../../components/leads/LeadDetails";
 import DiscoverLeadsMap from "../../components/leads/DiscoverLeadsMap";
+import SettingsTab from "./SettingsTab";
 
 function DashboardPage() {
   const { loading, authenticated } = useAuth();
@@ -57,7 +58,7 @@ function DashboardPage() {
         <div className="p-3">
           {toggle === 0 && <LeadDetails />}
           {toggle === 1 && <DiscoverLeadsMap discovery={discovery} setDiscovery={setDiscovery} />}
-          {toggle === 2 && <p className="text-muted">Settings coming soon.</p>}
+          {toggle === 2 && <SettingsTab />}
         </div>
       </main>
       <div className="h-100">

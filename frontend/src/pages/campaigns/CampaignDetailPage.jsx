@@ -16,6 +16,7 @@ export default function CampaignDetailPage() {
   const [editingConfig, setEditingConfig] = useState(false);
   const [configFields, setConfigFields] = useState({});
   const [configSaving, setConfigSaving] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const logEndRef = useRef(null);
@@ -63,15 +64,20 @@ export default function CampaignDetailPage() {
 
   function startEditing() {
     setConfigFields({
-      vertical:         campaign.vertical || '',
-      location:         campaign.location || '',
-      offer:            campaign.offer || '',
-      angle:            campaign.angle || '',
-      goodFitSignals:   campaign.goodFitSignals || '',
-      qualifier:        campaign.qualifier || '',
-      qualifyThreshold: campaign.qualifyThreshold ?? 4,
-      tone:             campaign.tone || '',
-      dailyTarget:      campaign.dailyTarget ?? 10,
+      vertical:          campaign.vertical || '',
+      location:          campaign.location || '',
+      offer:             campaign.offer || '',
+      angle:             campaign.angle || '',
+      goodFitSignals:    campaign.goodFitSignals || '',
+      qualifier:         campaign.qualifier || '',
+      qualifyThreshold:  campaign.qualifyThreshold ?? 4,
+      tone:              campaign.tone || '',
+      dailyTarget:       campaign.dailyTarget ?? 10,
+      radiusMeters:      campaign.radiusMeters ?? 5000,
+      gridRadiusMeters:  campaign.gridRadiusMeters ?? 2000,
+      gridSpacingMeters: campaign.gridSpacingMeters ?? 3000,
+      cellsPerRun:       campaign.cellsPerRun ?? 3,
+      rotateQueries:     campaign.rotateQueries ?? false,
     });
     setEditingConfig(true);
   }
@@ -218,6 +224,70 @@ export default function CampaignDetailPage() {
                 onChange={(e) => setConfigFields((p) => ({ ...p, qualifyThreshold: Number(e.target.value) }))} />
             </div>
           </div>
+          <div className="mt-3">
+            <button
+              type="button"
+              className="btn btn-sm btn-link p-0 text-decoration-none"
+              onClick={() => setShowAdvanced((v) => !v)}
+            >
+              {showAdvanced ? '▼' : '▶'} Advanced (search area, grid)
+            </button>
+          </div>
+          {showAdvanced && (
+            <div className="row g-2 mt-1" style={{ fontSize: '0.9rem' }}>
+              <div className="col-md-6">
+                <label className="form-label fw-semibold mb-1">
+                  Area radius (m) <small className="text-muted fw-normal">(1000-50000, total ground covered)</small>
+                </label>
+                <input type="number" className="form-control form-control-sm" min={1000} max={50000} step={500}
+                  value={configFields.radiusMeters}
+                  onChange={(e) => setConfigFields((p) => ({ ...p, radiusMeters: Number(e.target.value) }))} />
+              </div>
+              <div className="col-md-6">
+                <label className="form-label fw-semibold mb-1">
+                  Grid spacing (m) <small className="text-muted fw-normal">(1000-10000, distance between cells)</small>
+                </label>
+                <input type="number" className="form-control form-control-sm" min={1000} max={10000} step={500}
+                  value={configFields.gridSpacingMeters}
+                  onChange={(e) => setConfigFields((p) => ({ ...p, gridSpacingMeters: Number(e.target.value) }))} />
+              </div>
+              <div className="col-md-6">
+                <label className="form-label fw-semibold mb-1">
+                  Per-cell radius (m) <small className="text-muted fw-normal">(500-5000)</small>
+                </label>
+                <input type="number" className="form-control form-control-sm" min={500} max={5000} step={250}
+                  value={configFields.gridRadiusMeters}
+                  onChange={(e) => setConfigFields((p) => ({ ...p, gridRadiusMeters: Number(e.target.value) }))} />
+              </div>
+              <div className="col-md-6">
+                <label className="form-label fw-semibold mb-1">
+                  Cells per run <small className="text-muted fw-normal">(1-20)</small>
+                </label>
+                <input type="number" className="form-control form-control-sm" min={1} max={20}
+                  value={configFields.cellsPerRun}
+                  onChange={(e) => setConfigFields((p) => ({ ...p, cellsPerRun: Number(e.target.value) }))} />
+              </div>
+              <div className="col-12">
+                <div className="form-check">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id="rotateQueries"
+                    checked={configFields.rotateQueries}
+                    onChange={(e) => setConfigFields((p) => ({ ...p, rotateQueries: e.target.checked }))}
+                  />
+                  <label className="form-check-label" htmlFor="rotateQueries">
+                    Rotate query phrasings <small className="text-muted">(experimental — may reduce per-cell quality)</small>
+                  </label>
+                </div>
+              </div>
+              <div className="col-12">
+                <small className="text-muted">
+                  Changing area or spacing rebuilds the search grid on the next run.
+                </small>
+              </div>
+            </div>
+          )}
           <div className="d-flex gap-2 mt-3">
             <button className="btn btn-sm btn-primary" onClick={saveConfig} disabled={configSaving}>
               {configSaving ? 'Saving...' : 'Save'}
@@ -246,6 +316,9 @@ export default function CampaignDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Search coverage */}
+      <SearchCoverageCard campaign={campaign} />
 
       {/* Live run panel */}
       {(running || runEvents.length > 0) && (
@@ -392,4 +465,33 @@ function StatusBadge({ campaign }) {
   if (!campaign.setupComplete) return <span className="badge bg-warning text-dark">Setup incomplete</span>;
   if (campaign.active) return <span className="badge bg-success">Active</span>;
   return <span className="badge bg-secondary">Paused</span>;
+}
+
+function SearchCoverageCard({ campaign }) {
+  const cells = Array.isArray(campaign.searchCenters) ? campaign.searchCenters : [];
+  if (cells.length === 0) {
+    return (
+      <div className="card card-body mb-3" style={{ fontSize: '0.85rem' }}>
+        <strong>Search coverage:</strong>{' '}
+        <span className="text-muted">Grid not built yet — will generate on first run.</span>
+      </div>
+    );
+  }
+
+  const now = Date.now();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  const searchedRecently = cells.filter(
+    (c) => c.lastSearchedAt && now - new Date(c.lastSearchedAt).getTime() < sevenDaysMs
+  ).length;
+  const neverSearched = cells.filter((c) => !c.lastSearchedAt).length;
+
+  return (
+    <div className="card card-body mb-3" style={{ fontSize: '0.85rem' }}>
+      <div className="d-flex gap-4 flex-wrap">
+        <div><strong>Total cells:</strong> {cells.length}</div>
+        <div><strong>Searched in last 7 days:</strong> {searchedRecently}</div>
+        <div><strong>Never searched:</strong> {neverSearched}</div>
+      </div>
+    </div>
+  );
 }

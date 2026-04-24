@@ -15,6 +15,7 @@ import CampaignDetailPage from './pages/campaigns/CampaignDetailPage';
 import LeadPage from './pages/leads/LeadPage';
 import PricingPage from './pages/billing/PricingPage';
 import BillingPage from './pages/billing/BillingPage';
+import SettingsPage from './pages/settings/SettingsPage';
 import PaymentSuccessfulPage from './pages/billing/PaymentSuccessfulPage';
 import PaymentCancelPage from './pages/billing/PaymentCancelPage';
 
@@ -48,6 +49,7 @@ export default function App() {
                 <Route path="/campaigns/:id/setup" element={<ProtectedRoute><CampaignSetupPage /></ProtectedRoute>} />
                 <Route path="/leads/:id" element={<ProtectedRoute><LeadPage /></ProtectedRoute>} />
 
+                <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                 <Route path="/pricing" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />
                 <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
                 <Route path="/billing/success" element={<ProtectedRoute><PaymentSuccessfulPage /></ProtectedRoute>} />

@@ -11,7 +11,14 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(cookieParser());
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, cb) => {
+    const allowed = process.env.CLIENT_URL || 'http://localhost:5173';
+    // Allow web app origin, any chrome-extension origin, and no-origin (tools like curl)
+    if (!origin || origin === allowed || origin.startsWith('chrome-extension://')) {
+      return cb(null, true);
+    }
+    cb(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 }));
 // Stripe webhook — must use raw body before express.json() parses it

@@ -1,10 +1,29 @@
 {
   "manifest_version": 3,
-  "name": "ReplyPilot Maps Helper",
-  "version": "1.0",
-  "content_scripts": [{
-    "matches": ["https://www.google.com/maps/*"],
-    "js": ["content.js"],
-    "run_at": "document_idle"
-  }]
+  "name": "ReplyPilot Maps Assistant",
+  "version": "2.1.0",
+  "description": "Enrich ReplyPilot leads with Google Maps listing data.",
+  "permissions": ["storage", "sidePanel", "scripting", "tabs"],
+  "host_permissions": [
+    "https://www.google.com/*",
+    "https://maps.google.com/*",
+    "http://localhost:3001/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:5173/*"],
+      "js": ["bridge.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["scraper.js", "content.js"],
+      "matches": ["https://www.google.com/*", "https://maps.google.com/*"]
+    }
+  ],
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "panel.html" },
+  "options_page": "options.html",
+  "action": { "default_title": "ReplyPilot" }
 }

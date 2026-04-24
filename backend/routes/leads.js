@@ -1,4 +1,5 @@
-const router = require('express').Router();
+const express = require('express');
+const router = express.Router();
 const prisma = require('../lib/prisma.js');
 const z = require('zod');
 const { enrichIdentity } = require('../service/enrichLead/identity');
@@ -398,6 +399,105 @@ router.post('/:id/enrich/contact', async (req, res) => {
     return res.status(500).json({ message: 'Failed to enrich contact', error: error.message });
   }
 })
+
+// POST /:id/maps-data — receive scraped Google Maps listing data from the browser extension
+router.post('/:id/maps-data', async (req, res) => {
+  const userId = req.user.userId;
+  const leadId = req.params.id;
+
+  const lead = await prisma.lead.findFirst({ where: { id: leadId, userId } });
+  if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+  const {
+    reviewCount, reviewAvg, reviewSamples, photoCount,
+    hoursText, attributes, ownerClaimed, ownerResponseRate,
+  } = req.body;
+
+  const data = { lastMapsSyncAt: new Date() };
+  if (reviewCount !== undefined) data.reviewCount = reviewCount;
+  if (reviewAvg !== undefined) data.reviewAvg = reviewAvg;
+  if (reviewSamples !== undefined) data.reviewSamples = reviewSamples;
+  if (photoCount !== undefined) data.photoCount = photoCount;
+  if (hoursText !== undefined) data.hoursText = hoursText;
+  if (Array.isArray(attributes)) data.attributes = attributes;
+  if (ownerClaimed !== undefined) data.ownerClaimed = ownerClaimed;
+  if (ownerResponseRate !== undefined) data.ownerResponseRate = ownerResponseRate;
+
+  try {
+    const updated = await prisma.lead.update({ where: { id: leadId }, data });
+    return res.json(updated);
+  } catch (err) {
+    console.error('POST /maps-data error:', err);
+    res.status(500).json({ error: 'Failed to save maps data' });
+  }
+});
+
+// POST /:id/maps-screenshot — vision-model fallback when DOM scraping misses fields
+router.post('/:id/maps-screenshot', express.json({ limit: '10mb' }), async (req, res) => {
+  const userId = req.user.userId;
+  const leadId = req.params.id;
+
+  const lead = await prisma.lead.findFirst({ where: { id: leadId, userId } });
+  if (!lead) return res.status(404).json({ error: 'Lead not found' });
+
+  const { screenshotBase64, missingFields } = req.body;
+  if (!screenshotBase64 || !Array.isArray(missingFields) || missingFields.length === 0) {
+    return res.status(400).json({ error: 'screenshotBase64 and missingFields required' });
+  }
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const fieldList = missingFields.join(', ');
+    const prompt = `You are looking at a Google Maps listing for a business. Extract ONLY these fields from the image: ${fieldList}.
+
+Return STRICT JSON with these keys (use null for any field you cannot determine):
+{
+  "reviewCount": <integer or null>,
+  "reviewAvg": <float 0-5 or null>,
+  "photoCount": <integer or null>,
+  "hoursText": <string or null>,
+  "ownerClaimed": <boolean or null>
+}
+
+Only include keys from the requested missing fields list. Return nothing else.`;
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6-20250514',
+      max_tokens: 400,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/png', data: screenshotBase64 } },
+          { type: 'text', text: prompt },
+        ],
+      }],
+    });
+
+    const raw = response.content[0].text.trim();
+    let parsed;
+    try {
+      parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    } catch {
+      return res.status(500).json({ error: 'Failed to parse vision response', raw });
+    }
+
+    // Persist only the fields that came back non-null and were in the missing list
+    const data = { lastMapsSyncAt: new Date() };
+    for (const field of missingFields) {
+      if (parsed[field] !== undefined && parsed[field] !== null) {
+        data[field] = parsed[field];
+      }
+    }
+
+    const updated = await prisma.lead.update({ where: { id: leadId }, data });
+    return res.json({ updated, filled: Object.keys(data).filter(k => k !== 'lastMapsSyncAt') });
+  } catch (err) {
+    console.error('POST /maps-screenshot error:', err);
+    res.status(500).json({ error: 'Vision fallback failed', detail: err.message });
+  }
+});
 
 
 router.get('/:id/enrich/status/:goal', async (req, res) => {

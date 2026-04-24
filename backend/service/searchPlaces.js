@@ -11,36 +11,81 @@ const PLACES_KEY = process.env.GOOGLE_MAPS_KEY;
 const FIELDS = "places.displayName,places.websiteUri,places.location,places.id,places.googleMapsUri,places.addressComponents,places.businessStatus,places.nationalPhoneNumber,places.internationalPhoneNumber";
 
 /**
- * Generate 2-3 Google Places text search queries from campaign config.
+ * Generate 3 Google Places text search queries from campaign config.
+ * If campaign.rotateQueries is enabled, avoids phrasings already in searchQueryHistory.
  */
 async function generateSearchQueries(campaign) {
+  const rotate = !!campaign.rotateQueries;
+  const history = Array.isArray(campaign.searchQueryHistory) ? campaign.searchQueryHistory : [];
+  const recentHistory = history.slice(-20);
+
+  const promptLines = [
+    `You're helping find local businesses for cold outreach.`,
+    `Vertical: ${campaign.vertical}`,
+    `Location: ${campaign.location}`,
+    `Offer: ${campaign.offer}`,
+    ``,
+  ];
+
+  if (rotate && recentHistory.length > 0) {
+    promptLines.push(
+      `Do NOT reuse these exact phrasings (already searched):`,
+      ...recentHistory.map((q) => `- ${q}`),
+      ``,
+      `Generate 3 FRESH text search queries that approach the same targeting from different angles.`,
+    );
+  } else {
+    promptLines.push(
+      `Generate exactly 3 different Google Places text search queries to find these businesses.`,
+      `Each query should use different phrasing/angles to maximise coverage.`,
+    );
+  }
+
+  promptLines.push(`Return ONLY a JSON array of strings, nothing else. Example: ["query 1", "query 2", "query 3"]`);
+
   const response = await claude.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 200,
-    messages: [
-      {
-        role: "user",
-        content: [
-          `You're helping find local businesses for cold outreach.`,
-          `Vertical: ${campaign.vertical}`,
-          `Location: ${campaign.location}`,
-          `Offer: ${campaign.offer}`,
-          ``,
-          `Generate exactly 3 different Google Places text search queries to find these businesses.`,
-          `Each query should use different phrasing/angles to maximise coverage.`,
-          `Return ONLY a JSON array of strings, nothing else. Example: ["query 1", "query 2", "query 3"]`,
-        ].join("\n"),
-      },
-    ],
+    messages: [{ role: "user", content: promptLines.join("\n") }],
   });
 
   const raw = response.content[0].text.trim();
+  let queries;
   try {
-    const queries = JSON.parse(raw.replace(/```json|```/g, "").trim());
-    if (Array.isArray(queries)) return queries.slice(0, 3);
+    const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+    if (Array.isArray(parsed)) queries = parsed.slice(0, 3);
   } catch {}
-  // Fallback: single obvious query
-  return [`${campaign.vertical} in ${campaign.location}`];
+
+  if (!queries || queries.length === 0) {
+    queries = [`${campaign.vertical} in ${campaign.location}`];
+  }
+
+  return queries;
+}
+
+/**
+ * Build a square grid of search cells covering a circular area around a center.
+ * Returns array of { lat, lng, lastSearchedAt: null }.
+ */
+function buildSearchGrid({ centerLat, centerLng, areaRadiusMeters, spacingMeters }) {
+  const N = Math.ceil(areaRadiusMeters / spacingMeters);
+  const metersPerDegLat = 111320;
+  const metersPerDegLng = 111320 * Math.cos((centerLat * Math.PI) / 180);
+
+  const cells = [];
+  for (let i = -N; i <= N; i++) {
+    for (let j = -N; j <= N; j++) {
+      const dx = i * spacingMeters;
+      const dy = j * spacingMeters;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance > areaRadiusMeters) continue;
+
+      const lat = centerLat + dy / metersPerDegLat;
+      const lng = centerLng + dx / metersPerDegLng;
+      cells.push({ lat, lng, lastSearchedAt: null });
+    }
+  }
+  return cells;
 }
 
 /**
@@ -95,7 +140,7 @@ async function geocodeLocation(locationStr) {
  * Returns { discovered, filtered, places }.
  */
 async function discoverPlaces(campaign) {
-  // Resolve lat/lng: use stored values or geocode
+  // Resolve center lat/lng: use stored values or geocode
   let lat = campaign.locationLat;
   let lng = campaign.locationLng;
   if (!lat || !lng) {
@@ -103,7 +148,6 @@ async function discoverPlaces(campaign) {
     if (geo) {
       lat = geo.lat;
       lng = geo.lng;
-      // Persist for future runs
       await prisma.campaign.update({
         where: { id: campaign.id },
         data: { locationLat: lat, locationLng: lng },
@@ -111,36 +155,87 @@ async function discoverPlaces(campaign) {
     }
   }
 
-  // Generate search queries
-  const queries = await generateSearchQueries(campaign);
-  console.log(`[discover] Campaign "${campaign.name}" — queries:`, queries);
-
-  // Run all queries and collect results
-  const allPlaces = [];
-  const seenPlacesIds = new Set();
-
-  for (const query of queries) {
-    try {
-      const places = await placesTextSearch({
-        query,
-        lat,
-        lng,
-        radius: campaign.radiusMeters,
-      });
-      for (const p of places) {
-        if (!p.id || seenPlacesIds.has(p.id)) continue;
-        seenPlacesIds.add(p.id);
-        allPlaces.push(p);
-      }
-    } catch (e) {
-      console.error(`[discover] Query "${query}" failed:`, e.message);
-    }
+  if (!lat || !lng) {
+    console.error(`[discover] Could not resolve location for campaign "${campaign.name}"`);
+    return { discovered: 0, filtered: 0, places: [] };
   }
 
+  // Build the search grid if not yet built
+  let searchCenters = Array.isArray(campaign.searchCenters) ? campaign.searchCenters : null;
+  if (!searchCenters || searchCenters.length === 0) {
+    searchCenters = buildSearchGrid({
+      centerLat: lat,
+      centerLng: lng,
+      areaRadiusMeters: campaign.radiusMeters,
+      spacingMeters: campaign.gridSpacingMeters,
+    });
+    console.log(`[discover] Built grid of ${searchCenters.length} cells for campaign "${campaign.name}"`);
+  }
+
+  // Pick the oldest-searched cells (nulls first)
+  const sorted = [...searchCenters].sort((a, b) => {
+    const ta = a.lastSearchedAt ? new Date(a.lastSearchedAt).getTime() : 0;
+    const tb = b.lastSearchedAt ? new Date(b.lastSearchedAt).getTime() : 0;
+    return ta - tb;
+  });
+  const selectedCells = sorted.slice(0, campaign.cellsPerRun);
+
+  // Generate queries once per run, shared across cells
+  const queries = await generateSearchQueries(campaign);
+  console.log(`[discover] Campaign "${campaign.name}" — ${selectedCells.length} cells × ${queries.length} queries`);
+
+  // Append to history only when rotation is enabled
+  const newHistory = campaign.rotateQueries
+    ? [...(campaign.searchQueryHistory || []), ...queries].slice(-50)
+    : campaign.searchQueryHistory || [];
+
+  // Search each selected cell
+  const allPlaces = [];
+  const seenPlacesIds = new Set();
+  const now = new Date();
+
+  for (const cell of selectedCells) {
+    for (const query of queries) {
+      try {
+        const places = await placesTextSearch({
+          query,
+          lat: cell.lat,
+          lng: cell.lng,
+          radius: campaign.gridRadiusMeters,
+        });
+        for (const p of places) {
+          if (!p.id || seenPlacesIds.has(p.id)) continue;
+          seenPlacesIds.add(p.id);
+          allPlaces.push(p);
+        }
+      } catch (e) {
+        console.error(`[discover] Cell ${cell.lat},${cell.lng} query "${query}" failed:`, e.message);
+      }
+    }
+    cell.lastSearchedAt = now.toISOString();
+  }
+
+  // Merge updated cells back into the full searchCenters array
+  const selectedKeys = new Set(selectedCells.map((c) => `${c.lat},${c.lng}`));
+  const updatedCenters = searchCenters.map((c) => {
+    const key = `${c.lat},${c.lng}`;
+    if (selectedKeys.has(key)) {
+      return { ...c, lastSearchedAt: now.toISOString() };
+    }
+    return c;
+  });
+
+  // Persist: grid + query history
+  await prisma.campaign.update({
+    where: { id: campaign.id },
+    data: {
+      searchCenters: updatedCenters,
+      searchQueryHistory: newHistory,
+    },
+  });
+
   // Filter out permanently closed
-  const open = allPlaces.filter(
-    (p) => p.businessStatus !== "CLOSED_PERMANENTLY"
-  );
+  const open = allPlaces.filter((p) => p.businessStatus !== "CLOSED_PERMANENTLY");
 
   // Filter out leads already in DB for this user
   const existingPlacesIds = await prisma.lead.findMany({
@@ -231,4 +326,5 @@ module.exports = {
   generateSearchQueries,
   geocodeLocation,
   fetchPlaceDetails,
+  buildSearchGrid,
 };

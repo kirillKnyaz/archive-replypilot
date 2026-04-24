@@ -11,7 +11,18 @@ const { startRun, emitEvent, endRun, getActiveRun, addListener, removeListener }
 
 // ── Helpers ──
 
-const ALLOWED_FIELDS = new Set([...REQUIRED_SLOTS, "goodFitSignals", "qualifyThreshold"]);
+const ALLOWED_FIELDS = new Set([
+  ...REQUIRED_SLOTS,
+  "goodFitSignals",
+  "qualifyThreshold",
+  "radiusMeters",
+  "gridRadiusMeters",
+  "gridSpacingMeters",
+  "cellsPerRun",
+  "rotateQueries",
+]);
+
+const GRID_INVALIDATING_FIELDS = ["radiusMeters", "gridSpacingMeters", "location"];
 
 /** Build a Prisma-safe update object from the campaign_delta. */
 function buildColumnUpdate(delta) {
@@ -129,6 +140,14 @@ router.patch("/:id", async (req, res) => {
   if (Object.keys(slotUpdate).length > 0) {
     const merged = { ...campaign, ...data };
     data.setupComplete = isSetupComplete(merged);
+  }
+
+  // If location or grid geometry changed, clear the grid so it rebuilds next run
+  const gridChanged = GRID_INVALIDATING_FIELDS.some(
+    (f) => data[f] !== undefined && data[f] !== campaign[f]
+  );
+  if (gridChanged) {
+    data.searchCenters = null;
   }
 
   const updated = await prisma.campaign.update({

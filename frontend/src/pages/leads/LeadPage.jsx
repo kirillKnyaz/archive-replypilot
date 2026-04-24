@@ -11,6 +11,8 @@ export default function LeadPage() {
   const [messageDirty, setMessageDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichStatus, setEnrichStatus] = useState(null);
 
   useEffect(() => {
     API.get(`/leads/${id}`)
@@ -41,6 +43,47 @@ export default function LeadPage() {
     await navigator.clipboard.writeText(message);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function enrichViaMaps() {
+    if (!lead.mapsUri) return;
+    const startedAt = new Date(lead.lastMapsSyncAt || 0).getTime();
+
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+    const backendBase = apiBase.replace(/\/api\/?$/, '');
+
+    // Ask the extension (via its bridge content script) to open the Maps tab
+    window.postMessage({
+      type: 'rp_enrich_request',
+      leadId: lead.id,
+      mapsUrl: lead.mapsUri,
+      apiBase: backendBase,
+    }, window.location.origin);
+
+    setEnriching(true);
+    setEnrichStatus('Capturing... (make sure the extension is installed)');
+
+    const deadline = Date.now() + 60_000;
+    const poll = async () => {
+      if (Date.now() > deadline) {
+        setEnriching(false);
+        setEnrichStatus('Timed out — extension not installed, not signed in, or selectors failed.');
+        return;
+      }
+      try {
+        const { data } = await API.get(`/leads/${id}`);
+        const synced = new Date(data.lastMapsSyncAt || 0).getTime();
+        if (synced > startedAt) {
+          setLead(data);
+          setEnriching(false);
+          setEnrichStatus('Enrichment complete.');
+          setTimeout(() => setEnrichStatus(null), 3000);
+          return;
+        }
+      } catch {}
+      setTimeout(poll, 2000);
+    };
+    setTimeout(poll, 2000);
   }
 
   if (loading) {
@@ -159,7 +202,21 @@ export default function LeadPage() {
             Google Maps ↗
           </a>
         )}
+        {lead.mapsUri && (
+          <button
+            className="btn btn-sm btn-outline-primary"
+            onClick={enrichViaMaps}
+            disabled={enriching}
+          >
+            {enriching ? 'Enriching...' : 'Enrich via Maps'}
+          </button>
+        )}
       </div>
+      {enrichStatus && (
+        <div className="alert alert-info py-2 px-3 mb-3" style={{ fontSize: '0.85rem' }}>
+          {enrichStatus}
+        </div>
+      )}
 
       <div className="row g-3">
         {/* Left col: contact info + business details */}
@@ -192,6 +249,58 @@ export default function LeadPage() {
               )}
             </div>
           </div>
+
+          {lead.lastMapsSyncAt && (
+            <div className="card mb-3">
+              <div className="card-body">
+                <h6 className="card-title mb-3">Google Maps data</h6>
+                <div style={{ fontSize: "0.85rem" }}>
+                  {lead.reviewCount != null && (
+                    <div className="mb-1">
+                      <strong>{lead.reviewCount}</strong> reviews
+                      {lead.reviewAvg != null && <> · <strong>{lead.reviewAvg}</strong> avg</>}
+                    </div>
+                  )}
+                  {lead.photoCount != null && <div className="mb-1">{lead.photoCount} photos</div>}
+                  {lead.ownerClaimed != null && (
+                    <div className="mb-1">
+                      Owner: {lead.ownerClaimed ? 'claimed' : 'unclaimed'}
+                      {lead.ownerResponseRate != null && (
+                        <> · {Math.round(lead.ownerResponseRate * 100)}% response rate</>
+                      )}
+                    </div>
+                  )}
+                  {lead.hoursText && <div className="text-muted mt-2">{lead.hoursText}</div>}
+                  {lead.attributes?.length > 0 && (
+                    <div className="d-flex flex-wrap gap-1 mt-2">
+                      {lead.attributes.map((a) => (
+                        <span key={a} className="badge bg-light text-dark border" style={{ fontSize: "0.72rem" }}>
+                          {a}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {Array.isArray(lead.reviewSamples) && lead.reviewSamples.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="text-muted" style={{ cursor: 'pointer' }}>
+                        Recent reviews ({lead.reviewSamples.length})
+                      </summary>
+                      <div className="mt-2 d-flex flex-column gap-2">
+                        {lead.reviewSamples.map((r, i) => (
+                          <div key={i} className="border-start ps-2" style={{ borderColor: '#ddd' }}>
+                            <div className="text-muted" style={{ fontSize: "0.75rem" }}>
+                              {r.author || 'Anonymous'}{r.rating ? ` · ${r.rating}/5` : ''}
+                            </div>
+                            <div>{r.text}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="card">
             <div className="card-body">

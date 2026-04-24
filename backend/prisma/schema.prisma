@@ -11,6 +11,7 @@ model User {
   id            String         @id @default(uuid())
   email         String         @unique
   password      String
+  apiToken      String?        @unique
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   campaigns     Campaign[]
@@ -48,6 +49,16 @@ model Campaign {
   locationLat   Float?
   locationLng   Float?
   radiusMeters  Int           @default(5000)
+
+  // Grid-based location rotation
+  searchCenters      Json?
+  gridRadiusMeters   Int       @default(2000)
+  gridSpacingMeters  Int       @default(3000)
+  cellsPerRun        Int       @default(3)
+
+  // Query rotation (opt-in — Google Places semantic matching may make this redundant)
+  rotateQueries      Boolean   @default(false)
+  searchQueryHistory String[]  @default([])
 
   offer         String        // what you're pitching to this vertical
   angle         String?       // the specific problem you're solving for them
@@ -142,6 +153,17 @@ model Lead {
   icpFitScore       Float?
   icpFitReason      String?
   generatedMessage  String?
+
+  // Google Maps enrichment
+  reviewCount        Int?
+  reviewAvg          Float?
+  reviewSamples      Json?
+  photoCount         Int?
+  hoursText          String?
+  attributes         String[]  @default([])
+  ownerClaimed       Boolean?
+  ownerResponseRate  Float?
+  lastMapsSyncAt     DateTime?
 
   messages          Message[]
   sources           LeadSource[]

@@ -25,6 +25,7 @@ export default function LeadsTable({ campaignId, refreshToken }) {
   const [scrapingIds, setScrapingIds] = useState(new Set());
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkWorking, setBulkWorking] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState(null);
 
   const selectAllRef = useRef(null);
 
@@ -208,6 +209,55 @@ export default function LeadsTable({ campaignId, refreshToken }) {
     }
   }
 
+  async function bulkEnrichViaMaps() {
+    const ids = [...selectedIds];
+    const targets = leads.filter((l) => ids.includes(l.id) && l.mapsUri);
+    if (targets.length === 0) {
+      window.alert('No selected leads have a Google Maps URL.');
+      return;
+    }
+    if (!window.confirm(`Open ${targets.length} Maps tabs sequentially to enrich? Keep the browser open.`)) return;
+
+    setBulkWorking(true);
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+    const backendBase = apiBase.replace(/\/api\/?$/, '');
+
+    try {
+      for (let i = 0; i < targets.length; i++) {
+        const lead = targets[i];
+        setBulkProgress(`Enriching ${i + 1}/${targets.length}: ${lead.name}`);
+        const startedAt = new Date(lead.lastMapsSyncAt || 0).getTime();
+
+        window.postMessage({
+          type: 'rp_enrich_request',
+          leadId: lead.id,
+          mapsUrl: lead.mapsUri,
+          apiBase: backendBase,
+        }, window.location.origin);
+
+        // Poll this lead until lastMapsSyncAt updates or 60s timeout
+        const deadline = Date.now() + 60_000;
+        while (Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const { data } = await API.get(`/leads/${lead.id}`);
+            if (new Date(data.lastMapsSyncAt || 0).getTime() > startedAt) break;
+          } catch {}
+        }
+
+        // Random 3-5s delay between leads
+        if (i < targets.length - 1) {
+          const delay = 3000 + Math.random() * 2000;
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      }
+      setBulkProgress(null);
+      clearSelection();
+    } finally {
+      setBulkWorking(false);
+    }
+  }
+
   if (fetching && leads.length === 0) return <p className="text-muted">Loading leads...</p>;
   if (!fetching && total === 0 && !filtersActive) return <p className="text-muted">No leads yet.</p>;
 
@@ -220,8 +270,12 @@ export default function LeadsTable({ campaignId, refreshToken }) {
           <button className="btn btn-sm btn-outline-secondary" onClick={() => bulkSetStatus('QUEUED')} disabled={bulkWorking}>Queue</button>
           <button className="btn btn-sm btn-outline-success" onClick={() => bulkSetStatus('CONTACTED')} disabled={bulkWorking}>Mark contacted</button>
           <button className="btn btn-sm btn-outline-warning" onClick={() => bulkSetStatus('ARCHIVED')} disabled={bulkWorking}>Archive</button>
+          <button className="btn btn-sm btn-outline-info" onClick={bulkEnrichViaMaps} disabled={bulkWorking}>
+            Enrich via Maps ({selectedIds.size})
+          </button>
           <button className="btn btn-sm btn-outline-danger" onClick={bulkDelete} disabled={bulkWorking}>Delete</button>
           <button className="btn btn-sm btn-link text-secondary p-0 ms-1" onClick={clearSelection}>✕</button>
+          {bulkProgress && <span className="text-muted ms-2">{bulkProgress}</span>}
         </div>
       )}
 

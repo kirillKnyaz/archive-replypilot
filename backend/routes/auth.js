@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const prisma = require('../lib/prisma.js');
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -83,6 +84,35 @@ router.post('/login', async (req, res) => {
 
 // AUTH check
 const authenticate = require('../middleware/authenticate');
+
+// GET /token — returns the user's current API token (null if none)
+router.get('/token', authenticate, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { apiToken: true },
+    });
+    res.json({ token: user?.apiToken ?? null });
+  } catch (err) {
+    console.error('GET /auth/token error:', err);
+    res.status(500).json({ error: 'Failed to fetch token' });
+  }
+});
+
+// POST /token — generate or regenerate the API token (returns the new token)
+router.post('/token', authenticate, async (req, res) => {
+  try {
+    const token = 'rp_' + crypto.randomBytes(16).toString('hex');
+    await prisma.user.update({
+      where: { id: req.user.userId },
+      data: { apiToken: token },
+    });
+    res.json({ token });
+  } catch (err) {
+    console.error('POST /auth/token error:', err);
+    res.status(500).json({ error: 'Failed to generate token' });
+  }
+});
 
 router.get('/me', authenticate, async (req, res) => {
   try {

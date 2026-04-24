@@ -1,0 +1,6 @@
+id | title | desc
+F001 | Stale tab binding TTL | pending_tab_<N> entries live until browser close; add queuedAt + cleanup sweep when leads pile up
+F002 | Auth DB lookup caching | authenticate.js hits DB on every rp_ token request; add in-memory cache keyed by token with short TTL
+F003 | Redact Authorization in logs | when request logging is added (morgan etc) redact Bearer tokens from log output
+F004 | Frontend listens for rp_extension_error | LeadPage + LeadsTable should catch bridge error messages instead of waiting 60s timeout
+F005 | Comment maps-scraped fire-and-forget | add comment in background.js explaining why this listener intentionally skips sendResponse

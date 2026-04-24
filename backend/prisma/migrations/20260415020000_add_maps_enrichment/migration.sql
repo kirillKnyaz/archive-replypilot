@@ -1,0 +1,14 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "apiToken" TEXT;
+CREATE UNIQUE INDEX "User_apiToken_key" ON "User"("apiToken");
+
+-- AlterTable
+ALTER TABLE "Lead" ADD COLUMN "reviewCount" INTEGER;
+ALTER TABLE "Lead" ADD COLUMN "reviewAvg" DOUBLE PRECISION;
+ALTER TABLE "Lead" ADD COLUMN "reviewSamples" JSONB;
+ALTER TABLE "Lead" ADD COLUMN "photoCount" INTEGER;
+ALTER TABLE "Lead" ADD COLUMN "hoursText" TEXT;
+ALTER TABLE "Lead" ADD COLUMN "attributes" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE "Lead" ADD COLUMN "ownerClaimed" BOOLEAN;
+ALTER TABLE "Lead" ADD COLUMN "ownerResponseRate" DOUBLE PRECISION;
+ALTER TABLE "Lead" ADD COLUMN "lastMapsSyncAt" TIMESTAMP(3);
