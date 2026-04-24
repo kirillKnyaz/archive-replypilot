@@ -91,6 +91,28 @@ console.log('[ReplyPilot] scraper.js loaded');
     return samples;
   }
 
+  function scrapeIdentity() {
+    const nameEl = document.querySelector('h1.DUwDvf, h1[class*="fontHeadlineLarge"]');
+    const addressBtn = document.querySelector('button[data-item-id="address"], [data-tooltip="Copy address"]');
+    const phoneBtn = document.querySelector('button[data-item-id^="phone:tel:"], [data-tooltip="Copy phone number"]');
+    const websiteLink = document.querySelector('a[data-item-id="authority"], [data-tooltip="Open website"]');
+
+    const name = text(nameEl);
+    const addressLabel = addressBtn?.getAttribute('aria-label') || text(addressBtn);
+    const address = addressLabel.replace(/^Address:\s*/i, '').trim();
+    const phoneLabel = phoneBtn?.getAttribute('aria-label') || text(phoneBtn);
+    const phone = phoneLabel.replace(/^Phone:\s*/i, '').trim();
+    const website = websiteLink?.href || null;
+
+    return {
+      name: name || null,
+      address: address || null,
+      phone: phone || null,
+      website: website || null,
+      mapsUrl: location.href,
+    };
+  }
+
   function scrapeOwnerResponseRate(samples) {
     if (!samples || samples.length === 0) return null;
     // Cheap heuristic: check if review cards contain "Response from owner"
@@ -114,6 +136,12 @@ console.log('[ReplyPilot] scraper.js loaded');
 
     const missing = [];
     const out = {};
+
+    try {
+      const identity = scrapeIdentity();
+      Object.assign(out, identity);
+      if (!identity.name) missing.push('name');
+    } catch { missing.push('name'); }
 
     try {
       const { reviewCount, reviewAvg } = scrapeReviewCountAndAvg();

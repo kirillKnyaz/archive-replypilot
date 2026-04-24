@@ -327,4 +327,5 @@ module.exports = {
   geocodeLocation,
   fetchPlaceDetails,
   buildSearchGrid,
+  placesTextSearch,
 };

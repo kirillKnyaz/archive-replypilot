@@ -110,30 +110,127 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     console.error('[ReplyPilot bg] scrape error:', msg.error);
     return;
   }
+
+  // === Side-panel discovery mode (Day 5) ===
+
+  // Ask content script on the active tab to scrape the current Maps place.
+  // If the content script isn't there (extension was reloaded while the Maps
+  // tab was open), inject it on demand and retry.
+  if (msg.type === 'extract-current-place') {
+    (async () => {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.url || !tab.url.includes('/maps/place/')) {
+          sendResponse({ ok: false, error: 'not-a-place-page', tabUrl: tab?.url || null });
+          return;
+        }
+
+        let res;
+        try {
+          res = await chrome.tabs.sendMessage(tab.id, { type: 'extract-place' });
+        } catch (err) {
+          // Orphaned or missing content script — inject and retry
+          console.log('[ReplyPilot bg] content script unreachable, injecting into tab', tab.id);
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['scraper.js', 'content.js'],
+          });
+          await new Promise((r) => setTimeout(r, 500));
+          res = await chrome.tabs.sendMessage(tab.id, { type: 'extract-place' });
+        }
+        sendResponse({ ...res, tabId: tab.id, apiBase: msg.apiBase });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err?.message || err) });
+      }
+    })();
+    return true;
+  }
+
+  // Fetch the user's campaigns (for the panel's dropdown)
+  if (msg.type === 'list-campaigns') {
+    (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return sendResponse({ ok: false, error: 'no-token' });
+        const res = await fetch(`${msg.apiBase}/api/campaigns`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return sendResponse({ ok: false, error: `${res.status}` });
+        const campaigns = await res.json();
+        sendResponse({ ok: true, campaigns });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err?.message || err) });
+      }
+    })();
+    return true;
+  }
+
+  // Check whether a place is already a lead for this user
+  if (msg.type === 'lookup-by-maps-url') {
+    (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return sendResponse({ ok: false, error: 'no-token' });
+        const qs = new URLSearchParams({ mapsUrl: msg.mapsUrl, name: msg.name || '', address: msg.address || '' });
+        const res = await fetch(`${msg.apiBase}/api/leads/lookup-by-maps?${qs}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return sendResponse({ ok: false, error: `${res.status}` });
+        const json = await res.json();
+        sendResponse({ ok: true, ...json });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err?.message || err) });
+      }
+    })();
+    return true;
+  }
+
+  // Create a new lead from the currently-scraped Maps data
+  if (msg.type === 'create-from-maps') {
+    (async () => {
+      try {
+        const token = await getToken();
+        if (!token) return sendResponse({ ok: false, error: 'no-token' });
+        const res = await fetch(`${msg.apiBase}/api/leads/from-maps`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ campaignId: msg.campaignId, ...msg.data }),
+        });
+        const json = await res.json();
+        if (!res.ok) return sendResponse({ ok: false, status: res.status, ...json });
+        sendResponse({ ok: true, lead: json });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err?.message || err) });
+      }
+    })();
+    return true;
+  }
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   clearTabCtx(tabId).catch(() => {});
 });
 
-// Inject scraper + content scripts into our bound Maps tabs once they finish loading
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status !== 'complete') return;
-  if (!tab.url) return;
-  if (!tab.url.startsWith('https://www.google.com/maps/') && !tab.url.startsWith('https://maps.google.com/')) return;
+// Open side panel when user clicks the extension toolbar icon
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+});
 
-  const ctx = await getTabCtx(tabId);
-  if (!ctx || ctx.injected) return;
+// Notify any open side panel when the active Maps tab changes or navigates.
+// Panel listens and re-runs its detection flow.
+function notifyPanel(tabId, url) {
+  chrome.runtime.sendMessage({ type: 'panel-refresh', tabId, url }).catch(() => {});
+}
 
-  await setTabCtx(tabId, { ...ctx, injected: true });
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  // Maps is a SPA — URL changes fire without a full reload
+  if (!changeInfo.url) return;
+  notifyPanel(tabId, changeInfo.url);
+});
 
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   try {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ['scraper.js', 'content.js'],
-    });
-    console.log('[ReplyPilot bg] injected scripts into tab', tabId, 'for lead', ctx.leadId, 'at', tab.url);
-  } catch (err) {
-    console.error('[ReplyPilot bg] scripting.executeScript failed:', err, 'tab url:', tab.url);
-  }
+    const tab = await chrome.tabs.get(tabId);
+    notifyPanel(tabId, tab.url || '');
+  } catch {}
 });

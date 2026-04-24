@@ -11,15 +11,17 @@
   ],
   "content_scripts": [
     {
+      "matches": [
+        "https://www.google.com/maps/*",
+        "https://maps.google.com/*"
+      ],
+      "js": ["scraper.js", "content.js"],
+      "run_at": "document_idle"
+    },
+    {
       "matches": ["http://localhost:5173/*"],
       "js": ["bridge.js"],
       "run_at": "document_start"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["scraper.js", "content.js"],
-      "matches": ["https://www.google.com/*", "https://maps.google.com/*"]
     }
   ],
   "background": { "service_worker": "background.js" },

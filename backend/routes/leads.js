@@ -4,7 +4,7 @@ const prisma = require('../lib/prisma.js');
 const z = require('zod');
 const { enrichIdentity } = require('../service/enrichLead/identity');
 const { enrichContact } = require('../service/enrichLead/contact');
-const { fetchPlaceDetails } = require('../service/searchPlaces');
+const { fetchPlaceDetails, placesTextSearch } = require('../service/searchPlaces');
 
 // all fields optional
 const leadManual = z.object({
@@ -20,6 +20,103 @@ const leadManual = z.object({
   tiktok: z.string().optional(),
   location: z.string().optional()
 })
+
+// ── Static routes must come BEFORE any /:id routes ──
+
+// GET /lookup-by-maps — check whether a place is already a lead for this user.
+// The extension scrapes name/address from a Maps page; we canonicalize via
+// Places text search and look up by placesId.
+router.get('/lookup-by-maps', async (req, res) => {
+  const userId = req.user.userId;
+  const { name, address } = req.query;
+  if (!name || !address) {
+    return res.status(400).json({ error: 'name and address required' });
+  }
+
+  try {
+    const results = await placesTextSearch({ query: `${name} ${address}`, radius: 50000 });
+    const placesId = results[0]?.id || null;
+    if (!placesId) return res.json({ exists: false });
+
+    const lead = await prisma.lead.findFirst({
+      where: { placesId, userId },
+      include: { campaign: { select: { id: true, name: true } } },
+    });
+    if (!lead) return res.json({ exists: false, canonicalPlacesId: placesId });
+    return res.json({ exists: true, lead, canonicalPlacesId: placesId });
+  } catch (err) {
+    console.error('GET /lookup-by-maps error:', err);
+    res.status(500).json({ error: 'Lookup failed', detail: err.message });
+  }
+});
+
+// POST /from-maps — create a lead from a manually-picked Google Maps business.
+// Extension sends scraped data; we canonicalize placesId via text search and
+// dedup. Status is set to QUALIFIED since the user explicitly picked this lead.
+router.post('/from-maps', async (req, res) => {
+  const userId = req.user.userId;
+  const {
+    campaignId, name, address, mapsUrl, website, phone,
+    reviewCount, reviewAvg, reviewSamples, photoCount,
+    hoursText, attributes, ownerClaimed, ownerResponseRate,
+  } = req.body;
+
+  if (!campaignId || !name || !address) {
+    return res.status(400).json({ error: 'campaignId, name, and address required' });
+  }
+
+  try {
+    const campaign = await prisma.campaign.findFirst({ where: { id: campaignId, userId } });
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+    let placesId = null;
+    try {
+      const results = await placesTextSearch({ query: `${name} ${address}`, radius: 50000 });
+      placesId = results[0]?.id || null;
+    } catch (e) {
+      console.warn('[from-maps] text search failed, continuing without placesId:', e.message);
+    }
+
+    if (placesId) {
+      const existing = await prisma.lead.findFirst({
+        where: { placesId, userId },
+        include: { campaign: { select: { id: true, name: true } } },
+      });
+      if (existing) {
+        return res.status(409).json({ error: 'already-exists', existing });
+      }
+    }
+
+    const lead = await prisma.lead.create({
+      data: {
+        userId,
+        campaignId,
+        name,
+        location: address,
+        mapsUri: mapsUrl || null,
+        placesId,
+        website: website || null,
+        phone: phone || null,
+        status: 'QUALIFIED',
+        identityComplete: true,
+        contactComplete: !!(website || phone),
+        reviewCount: reviewCount ?? null,
+        reviewAvg: reviewAvg ?? null,
+        reviewSamples: reviewSamples ?? null,
+        photoCount: photoCount ?? null,
+        hoursText: hoursText ?? null,
+        attributes: Array.isArray(attributes) ? attributes : [],
+        ownerClaimed: ownerClaimed ?? null,
+        ownerResponseRate: ownerResponseRate ?? null,
+        lastMapsSyncAt: new Date(),
+      },
+    });
+    res.status(201).json(lead);
+  } catch (err) {
+    console.error('POST /from-maps error:', err);
+    res.status(500).json({ error: 'Failed to create lead', detail: err.message });
+  }
+});
 
 router.get('/:id/enrichmentLog/:goal', async (req, res) => {
   const leadId = req.params.id;
