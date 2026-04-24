@@ -11,8 +11,9 @@ const CampaignDeltaZ = z.object({
   location:  z.string().min(1).optional().nullable(),
   offer:     z.string().min(1).optional().nullable(),
   angle:     z.string().min(1).optional().nullable(),
-  qualifier: z.string().min(1).optional().nullable(),
-  tone:      z.string().min(1).optional().nullable(),
+  qualifier:      z.string().min(1).optional().nullable(),
+  goodFitSignals: z.string().min(1).optional().nullable(),
+  tone:           z.string().min(1).optional().nullable(),
 }).strict();
 
 const CampaignRouterOutputZ = z.object({

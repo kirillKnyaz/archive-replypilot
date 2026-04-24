@@ -104,11 +104,6 @@ export default function LeadPage() {
           No contact found — consider visiting in person.
         </div>
       )}
-      {lead.inactiveSuspected && (
-        <div className="alert alert-secondary py-2 px-3 mb-3" style={{ fontSize: "0.85rem" }}>
-          Possibly inactive — sparse listing or no website.
-        </div>
-      )}
 
       {/* Action buttons */}
       <div className="d-flex gap-2 mb-4 flex-wrap">

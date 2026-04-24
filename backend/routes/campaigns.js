@@ -6,11 +6,12 @@ const { handleMetaFlow } = require("../service/campaignSetup/metaFlow");
 const { pickNextSlot, isSetupComplete, progress } = require("../service/campaignSetup/slotPicker");
 const { REQUIRED_SLOTS } = require("../service/campaignSetup/steps");
 const { runCampaign } = require("../service/campaignRunner");
+const { requalifyCampaign } = require("../service/requalifyRunner");
 const { startRun, emitEvent, endRun, getActiveRun, addListener, removeListener } = require("../service/runTracker");
 
 // ── Helpers ──
 
-const ALLOWED_FIELDS = new Set(REQUIRED_SLOTS);
+const ALLOWED_FIELDS = new Set([...REQUIRED_SLOTS, "goodFitSignals", "qualifyThreshold"]);
 
 /** Build a Prisma-safe update object from the campaign_delta. */
 function buildColumnUpdate(delta) {
@@ -172,6 +173,29 @@ router.post("/:id/run", async (req, res) => {
 
   // Run async — emitting events to the tracker
   runCampaign(campaign, (event) => {
+    emitEvent(campaign.id, event);
+  }).finally(() => {
+    endRun(campaign.id);
+  });
+});
+
+// POST /api/campaigns/:id/requalify — re-score existing leads with current config
+router.post("/:id/requalify", async (req, res) => {
+  const campaign = await prisma.campaign.findFirst({
+    where: { id: req.params.id, userId: req.user.userId },
+  });
+  if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+
+  // Block if a run or requalify is already active on this campaign
+  const existing = getActiveRun(campaign.id);
+  if (existing && existing.running) {
+    return res.json({ alreadyRunning: true });
+  }
+
+  startRun(campaign.id);
+  res.json({ started: true });
+
+  requalifyCampaign(campaign, (event) => {
     emitEvent(campaign.id, event);
   }).finally(() => {
     endRun(campaign.id);

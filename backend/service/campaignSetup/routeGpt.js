@@ -37,6 +37,7 @@ async function routeAndExtract({ userMessage, campaign, history = [] }) {
     "- offer: what's being pitched to the businesses",
     "- angle: specific problem being solved for this vertical",
     "- qualifier: what makes a business a BAD fit (filter criteria)",
+    "- goodFitSignals: what makes a business a GOOD fit (positive signals to score higher)",
     "- tone: message style — casual, professional, or direct",
     "",
     "If a field should be cleared, set it to null. Never invent values.",

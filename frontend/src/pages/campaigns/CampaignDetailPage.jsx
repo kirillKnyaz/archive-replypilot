@@ -20,7 +20,7 @@ export default function CampaignDetailPage() {
 
   const logEndRef = useRef(null);
 
-  const { running, runEvents, runStats, startLiveRun, checkForActiveRun, dismiss, cleanup } =
+  const { running, runEvents, runStats, startLiveRun, startLiveRequalify, checkForActiveRun, dismiss, cleanup } =
     useCampaignRun(id, fetchAll);
 
   useEffect(() => {
@@ -63,13 +63,15 @@ export default function CampaignDetailPage() {
 
   function startEditing() {
     setConfigFields({
-      vertical:    campaign.vertical || '',
-      location:    campaign.location || '',
-      offer:       campaign.offer || '',
-      angle:       campaign.angle || '',
-      qualifier:   campaign.qualifier || '',
-      tone:        campaign.tone || '',
-      dailyTarget: campaign.dailyTarget ?? 10,
+      vertical:         campaign.vertical || '',
+      location:         campaign.location || '',
+      offer:            campaign.offer || '',
+      angle:            campaign.angle || '',
+      goodFitSignals:   campaign.goodFitSignals || '',
+      qualifier:        campaign.qualifier || '',
+      qualifyThreshold: campaign.qualifyThreshold ?? 4,
+      tone:             campaign.tone || '',
+      dailyTarget:      campaign.dailyTarget ?? 10,
     });
     setEditingConfig(true);
   }
@@ -129,6 +131,17 @@ export default function CampaignDetailPage() {
               >
                 {campaign.active ? 'Pause' : 'Activate'}
               </button>
+              <button
+                className="btn btn-sm btn-outline-primary"
+                onClick={() => {
+                  if (window.confirm('Re-score all archived, queued, and qualified leads with current criteria?')) {
+                    startLiveRequalify();
+                  }
+                }}
+                disabled={running}
+              >
+                Requalify
+              </button>
               <button className="btn btn-sm btn-primary" onClick={startLiveRun} disabled={running}>
                 {running ? 'Running...' : 'Run now'}
               </button>
@@ -168,6 +181,13 @@ export default function CampaignDetailPage() {
             </div>
             <div className="col-12">
               <label className="form-label fw-semibold mb-1">
+                Good-fit signals <small className="text-muted fw-normal">(score leads higher when these apply)</small>
+              </label>
+              <textarea className="form-control form-control-sm" rows={2} value={configFields.goodFitSignals}
+                onChange={(e) => setConfigFields((p) => ({ ...p, goodFitSignals: e.target.value }))} />
+            </div>
+            <div className="col-12">
+              <label className="form-label fw-semibold mb-1">
                 Qualifier <small className="text-muted fw-normal">(bad fit signals)</small>
               </label>
               <textarea className="form-control form-control-sm" rows={2} value={configFields.qualifier}
@@ -189,6 +209,14 @@ export default function CampaignDetailPage() {
                 value={configFields.dailyTarget}
                 onChange={(e) => setConfigFields((p) => ({ ...p, dailyTarget: Number(e.target.value) }))} />
             </div>
+            <div className="col-md-6">
+              <label className="form-label fw-semibold mb-1">
+                Qualify threshold <small className="text-muted fw-normal">(1-10, lower = more leads through)</small>
+              </label>
+              <input type="number" className="form-control form-control-sm" min={1} max={10}
+                value={configFields.qualifyThreshold}
+                onChange={(e) => setConfigFields((p) => ({ ...p, qualifyThreshold: Number(e.target.value) }))} />
+            </div>
           </div>
           <div className="d-flex gap-2 mt-3">
             <button className="btn btn-sm btn-primary" onClick={saveConfig} disabled={configSaving}>
@@ -203,11 +231,13 @@ export default function CampaignDetailPage() {
             <div className="row flex-grow-1">
               <div className="col-md-6">
                 <strong>Angle:</strong> {campaign.angle || '—'}<br />
+                <strong>Good-fit:</strong> {campaign.goodFitSignals || '—'}<br />
                 <strong>Qualifier:</strong> {campaign.qualifier || '—'}
               </div>
               <div className="col-md-6">
                 <strong>Tone:</strong> {campaign.tone || '—'}<br />
-                <strong>Daily target:</strong> {campaign.dailyTarget}
+                <strong>Daily target:</strong> {campaign.dailyTarget}<br />
+                <strong>Threshold:</strong> {campaign.qualifyThreshold ?? 4}
               </div>
             </div>
             <button className="btn btn-sm btn-outline-secondary ms-3 flex-shrink-0" onClick={startEditing}>

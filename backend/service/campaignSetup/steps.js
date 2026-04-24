@@ -28,12 +28,17 @@ const CAMPAIGN_STEPS = [
     category: "filter",
   },
   {
+    id: "goodFitSignals",
+    prompt: "What makes a business a GOOD fit? (e.g. 'no website, outdated website, few Google photos, owner-operated')",
+    category: "filter",
+  },
+  {
     id: "tone",
     prompt: "What tone should the outreach messages use? (casual / professional / direct)",
     category: "style",
   },
 ];
 
-const REQUIRED_SLOTS = CAMPAIGN_STEPS.map(s => s.id);
+const REQUIRED_SLOTS = ["vertical", "location", "offer", "angle", "qualifier", "tone"];
 
 module.exports = { CAMPAIGN_STEPS, REQUIRED_SLOTS };

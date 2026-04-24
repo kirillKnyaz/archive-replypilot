@@ -75,6 +75,21 @@ export function useCampaignRun(campaignId, onRunComplete) {
     }
   }
 
+  async function startLiveRequalify() {
+    setRunEvents([]);
+    setRunStats(null);
+    try {
+      const { data } = await API.post(`/campaigns/${campaignId}/requalify`);
+      if (data.alreadyRunning) {
+        connectToSSE();
+        return;
+      }
+      setTimeout(() => connectToSSE(), 100);
+    } catch (e) {
+      console.error('Failed to start requalify', e);
+    }
+  }
+
   function dismiss() {
     setRunEvents([]);
     setRunStats(null);
@@ -84,5 +99,5 @@ export function useCampaignRun(campaignId, onRunComplete) {
     if (eventSourceRef.current) eventSourceRef.current.close();
   }
 
-  return { running, runEvents, runStats, startLiveRun, checkForActiveRun, dismiss, cleanup };
+  return { running, runEvents, runStats, startLiveRun, startLiveRequalify, checkForActiveRun, dismiss, cleanup };
 }

@@ -52,6 +52,8 @@ model Campaign {
   offer         String        // what you're pitching to this vertical
   angle         String?       // the specific problem you're solving for them
   qualifier     String?       // what makes a business a BAD fit (to filter out)
+  goodFitSignals String?      // what makes a business a GOOD fit (score higher)
+  qualifyThreshold Int        @default(4)  // leads scoring below this get archived
   tone          String?       // casual / professional / direct
 
   voiceExamples String[]      // example messages to guide Claude's style
