@@ -1,31 +1,92 @@
 @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&family=Prompt:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
 
-.menu-link:hover {
-  background-color: #f0f0f0;
-}
-
-.btn-subtle-outline-secondary {
-  background-color: transparent;
-  transition: all 0.3s ease;
-}
-
-.btn-subtle-outline-secondary:hover {
-  border: 1px solid #ccc;
-}
-
-.logo {
-  font-family: 'Prompt', sans-serif !important;
-}
-
+/* ── Base ── */
 * {
   font-family: 'Lexend', sans-serif;
   box-sizing: border-box;
 }
 
-.nav-link {
-  cursor: pointer;
+body {
+  font-size: 13px;
+  color: #111827;
+  background: #f9fafb;
 }
 
+/* ── Typography ── */
+h1, h2, h3, h4, h5, h6 { font-weight: 600; }
+
+.text-muted { color: #6b7280 !important; }
+
+/* ── Cards ── */
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.card-body { padding: 16px; }
+
+.card-title { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; }
+
+/* ── Buttons ── */
+.btn { border-radius: 5px; font-weight: 500; }
+
+.btn-sm { padding: 4px 11px; font-size: 0.8rem; }
+
+.btn-primary { background: #2563eb; border-color: #2563eb; }
+.btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
+
+.btn-outline-primary { color: #2563eb; border-color: #2563eb; }
+.btn-outline-primary:hover { background: #2563eb; border-color: #2563eb; }
+
+.btn-outline-success { color: #16a34a; border-color: #16a34a; }
+.btn-outline-success:hover { background: #16a34a; border-color: #16a34a; }
+
+.btn-outline-danger { color: #dc2626; border-color: #dc2626; }
+.btn-outline-danger:hover { background: #dc2626; border-color: #dc2626; }
+
+/* ── Badges ── */
+.badge { border-radius: 4px; font-weight: 600; }
+
+.bg-success { background-color: #16a34a !important; }
+.bg-danger  { background-color: #dc2626 !important; }
+.bg-warning { background-color: #f59e0b !important; }
+.bg-primary { background-color: #2563eb !important; }
+.bg-info    { background-color: #0891b2 !important; }
+
+/* ── Table ── */
+.table { font-size: 0.82rem; }
+.table th { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; }
+.table td, .table th { padding: 6px 10px; border-color: #f3f4f6; }
+.table-hover tbody tr:hover { background: #f9fafb; }
+
+/* ── Forms ── */
+.form-control, .form-select {
+  border-color: #e5e7eb;
+  border-radius: 5px;
+  font-size: 0.85rem;
+}
+.form-control:focus, .form-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+
+/* ── Nav ── */
+.nav-link { cursor: pointer; }
+
+.menu-link:hover { background-color: #f3f4f6; }
+
+/* ── Logo ── */
+.logo { font-family: 'Prompt', sans-serif !important; }
+
+/* ── Misc ── */
+.btn-subtle-outline-secondary {
+  background-color: transparent;
+  transition: background 0.15s;
+}
+.btn-subtle-outline-secondary:hover { border: 1px solid #d1d5db; }
+
+/* ── Chat bubbles ── */
 .message-bubble {
   position: relative;
   display: inline-block;
@@ -33,15 +94,13 @@
   max-width: 75%;
   color: white;
 }
-
 .message-bubble.bot {
-  background: #6c757d; /* secondary */
+  background: #6b7280;
   align-self: flex-start;
-  border-radius: 16px 16px 16px 0;
+  border-radius: 14px 14px 14px 0;
 }
-
 .message-bubble.me {
-  background: #0d6efd; /* primary */
+  background: #2563eb;
   align-self: flex-end;
-  border-radius: 16px 16px 0 16px;
+  border-radius: 14px 14px 0 14px;
 }

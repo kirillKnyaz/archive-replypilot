@@ -75,6 +75,7 @@ model Campaign {
 
   leads         Lead[]
   runs          CampaignRun[]
+  reaches       Reach[]
 
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -154,6 +155,10 @@ model Lead {
   icpFitReason      String?
   generatedMessage  String?
 
+  // Website quality (scored during identity enrichment)
+  websiteQuality     Int?
+  websiteQualityReason String?
+
   // Google Maps enrichment
   reviewCount        Int?
   reviewAvg          Float?
@@ -165,10 +170,36 @@ model Lead {
   ownerResponseRate  Float?
   lastMapsSyncAt     DateTime?
 
+  // Reach tracking
+  nextFollowUpAt    DateTime?
+  lastReachedAt     DateTime?
+  followUpCount     Int        @default(0)
+  activeChannel     ReachChannel?
+  lostReason        String?
+
   messages          Message[]
   sources           LeadSource[]
   logs              LeadEnrichmentLog[]
   lists             LeadList[]
+  reaches           Reach[]
+}
+
+model Reach {
+  id          String       @id @default(cuid())
+  leadId      String
+  lead        Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  campaignId  String?
+  campaign    Campaign?    @relation(fields: [campaignId], references: [id])
+  userId      String
+
+  channel     ReachChannel
+  result      ReachResult
+  transcript  String?
+
+  createdAt   DateTime     @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model List {
@@ -330,4 +361,23 @@ enum EnrichmentStatus {
   STARTED
   SUCCESS
   ERROR
+}
+
+enum ReachChannel {
+  EMAIL
+  PHONE
+  DM
+  DROP_IN
+}
+
+enum ReachResult {
+  NO_ANSWER
+  VOICEMAIL
+  GATEKEEPER
+  CONVERSATION
+  POSITIVE
+  NEGATIVE
+  FOLLOW_UP_REQUESTED
+  NOT_NOW
+  DO_NOT_CONTACT
 }

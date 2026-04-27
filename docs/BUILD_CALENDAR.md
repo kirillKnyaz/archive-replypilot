@@ -462,7 +462,9 @@ POST body: `{ channel, result, transcript? }`
 
 ---
 
-## Day 8 — Reach Log UI on LeadPage
+## Day 8 — Reach Log UI on LeadPage + UI Rebuild
+
+See [`UI_REBUILD_CALENDAR.md`](UI_REBUILD_CALENDAR.md) for the full spec. Day 8 reach log is built as part of Step 3 of that sprint alongside a table cleanup, URL-persisted filters, and a visual sharpness pass.
 
 **Why now:** Day 7 created the data layer. Day 8 makes it usable.
 

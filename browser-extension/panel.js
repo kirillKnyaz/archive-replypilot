@@ -85,11 +85,27 @@ async function renderExistingLead(data, existing) {
         </div>
       ` : ''}
       <hr>
-      <div style="display:flex; gap:8px;">
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button id="refreshBtn" class="secondary">Refresh Maps data</button>
         <a class="secondary" style="padding:6px 12px; border-radius:4px; background:#fff; border:1px solid #ced4da; color:#222;" href="${APP_BASE}/leads/${lead.id}" target="_blank">Open in ReplyPilot</a>
       </div>
+      <div id="refreshResult" style="margin-top:8px;"></div>
     </div>
   `);
+
+  document.getElementById('refreshBtn').addEventListener('click', () => {
+    const btn = document.getElementById('refreshBtn');
+    const result = document.getElementById('refreshResult');
+    btn.disabled = true;
+    result.innerHTML = '<span class="muted">Opening Maps tab to capture data…</span>';
+    chrome.runtime.sendMessage({
+      type: 'prepare-enrich',
+      leadId: lead.id,
+      apiBase: API_BASE,
+      mapsUrl: data.mapsUrl || lead.mapsUri,
+    });
+    result.innerHTML = '<span class="ok">Tab opened — it will close automatically when done.</span>';
+  });
 }
 
 async function renderNewLeadUI(data, campaigns) {

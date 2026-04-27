@@ -1,59 +1,76 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import API from '../../api';
 
 const PAGE_SIZE = 20;
 
+const ALL_STATUSES = ['DISCOVERED', 'ENRICHED', 'QUALIFIED', 'QUEUED', 'CONTACTED', 'REPLIED', 'WON', 'ARCHIVED'];
+
+const STATUS_STYLES = {
+  DISCOVERED: { bg: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db' },
+  ENRICHED:   { bg: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db' },
+  QUALIFIED:  { bg: '#dbeafe', color: '#1e40af', border: '1px solid #bfdbfe' },
+  QUEUED:     { bg: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0' },
+  CONTACTED:  { bg: '#e0e7ff', color: '#3730a3', border: '1px solid #c7d2fe' },
+  REPLIED:    { bg: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a' },
+  WON:        { bg: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' },
+  ARCHIVED:   { bg: '#f9fafb', color: '#9ca3af', border: '1px solid #e5e7eb' },
+};
+
+function statusLabel(s) {
+  return s.charAt(0) + s.slice(1).toLowerCase().replace('_', ' ');
+}
+
 export default function LeadsTable({ campaignId, refreshToken }) {
-  const [leads, setLeads] = useState([]);
-  const [total, setTotal] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [leads, setLeads]   = useState([]);
+  const [total, setTotal]   = useState(0);
   const [fetching, setFetching] = useState(true);
 
-  const [nameFilter, setNameFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [scoreFilter, setScoreFilter] = useState('');
-  const [emailFilter, setEmailFilter] = useState('');
-  const [phoneFilter, setPhoneFilter] = useState('');
-  const [facebookFilter, setFacebookFilter] = useState('');
-  const [mapsFilter, setMapsFilter] = useState('');
-  const [debouncedName, setDebouncedName] = useState('');
+  // Active statuses: Set of status strings. Empty = show all.
+  const [activeStatuses, setActiveStatuses] = useState(() => {
+    const s = searchParams.get('status');
+    return s ? new Set(s.split(',')) : new Set();
+  });
 
-  const [sortCol, setSortCol] = useState('score');
-  const [sortDir, setSortDir] = useState('desc');
-  const [page, setPage] = useState(0);
+  const [nameFilter, setNameFilter]     = useState(() => searchParams.get('name') || '');
+  const [debouncedName, setDebouncedName] = useState(() => searchParams.get('name') || '');
+  const [page, setPage] = useState(() => parseInt(searchParams.get('page') || '0', 10));
 
-  const [scrapingIds, setScrapingIds] = useState(new Set());
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [bulkWorking, setBulkWorking] = useState(false);
+  const [scrapingIds, setScrapingIds]   = useState(new Set());
+  const [selectedIds, setSelectedIds]   = useState(new Set());
+  const [bulkWorking, setBulkWorking]   = useState(false);
   const [bulkProgress, setBulkProgress] = useState(null);
 
   const selectAllRef = useRef(null);
 
-  // Debounce name filter
+  // Debounce name
   useEffect(() => {
     const t = setTimeout(() => setDebouncedName(nameFilter), 300);
     return () => clearTimeout(t);
   }, [nameFilter]);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [debouncedName, statusFilter, scoreFilter, emailFilter, phoneFilter, facebookFilter, mapsFilter]);
+  useEffect(() => { setPage(0); }, [debouncedName, activeStatuses]);
 
-  // Fetch from backend whenever query params change
+  // Sync state → URL
+  useEffect(() => {
+    const params = {};
+    if (debouncedName)        params.name   = debouncedName;
+    if (activeStatuses.size)  params.status = [...activeStatuses].join(',');
+    if (page > 0)             params.page   = String(page);
+    setSearchParams(params, { replace: true });
+  }, [debouncedName, activeStatuses, page]);
+
+  // Fetch leads
   useEffect(() => {
     let cancelled = false;
     setFetching(true);
 
-    const params = new URLSearchParams({
-      page, limit: PAGE_SIZE,
-      sortBy: sortCol, sortDir,
-      ...(debouncedName   && { name: debouncedName }),
-      ...(statusFilter    && { status: statusFilter }),
-      ...(scoreFilter     && { scoreFilter }),
-      ...(emailFilter     && { emailFilter }),
-      ...(phoneFilter     && { phoneFilter }),
-      ...(facebookFilter  && { facebookFilter }),
-      ...(mapsFilter      && { mapsFilter }),
-    });
+    const params = new URLSearchParams({ page, limit: PAGE_SIZE });
+    if (debouncedName)       params.set('name', debouncedName);
+    if (activeStatuses.size) params.set('status', [...activeStatuses].join(','));
 
     API.get(`/campaigns/${campaignId}/leads?${params}`)
       .then(({ data }) => {
@@ -65,9 +82,9 @@ export default function LeadsTable({ campaignId, refreshToken }) {
       .finally(() => { if (!cancelled) setFetching(false); });
 
     return () => { cancelled = true; };
-  }, [campaignId, page, sortCol, sortDir, debouncedName, statusFilter, scoreFilter, emailFilter, phoneFilter, facebookFilter, mapsFilter, refreshToken]);
+  }, [campaignId, page, debouncedName, activeStatuses, refreshToken]);
 
-  // Keep select-all checkbox indeterminate state in sync
+  // Indeterminate select-all
   useEffect(() => {
     if (!selectAllRef.current) return;
     const allSel = leads.length > 0 && leads.every((l) => selectedIds.has(l.id));
@@ -75,7 +92,7 @@ export default function LeadsTable({ campaignId, refreshToken }) {
     selectAllRef.current.indeterminate = someSel;
   });
 
-  // Listen for phone data from the browser extension
+  // Extension phone updates
   useEffect(() => {
     function onMessage(e) {
       if (e.data?.type !== 'REPLYPILOT_PHONE') return;
@@ -89,39 +106,41 @@ export default function LeadsTable({ campaignId, refreshToken }) {
     return () => window.removeEventListener('message', onMessage);
   }, [leads]);
 
-  function refetch() {
-    setPage((p) => p); // trigger effect by touching a dep — use refreshToken instead
+  function toggleStatus(status) {
+    setActiveStatuses((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
   }
 
-  const filtersActive = nameFilter || statusFilter || scoreFilter || emailFilter || phoneFilter || facebookFilter || mapsFilter;
+  const filtersActive = nameFilter || activeStatuses.size > 0;
 
   function clearFilters() {
     setNameFilter('');
-    setStatusFilter('');
-    setScoreFilter('');
-    setEmailFilter('');
-    setPhoneFilter('');
-    setFacebookFilter('');
-    setMapsFilter('');
-    setPage(0);
-  }
-
-  function handleSort(col) {
-    if (sortCol === col) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else { setSortCol(col); setSortDir('asc'); }
+    setDebouncedName('');
+    setActiveStatuses(new Set());
     setPage(0);
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
+  const allSelected = leads.length > 0 && leads.every((l) => selectedIds.has(l.id));
 
-  async function quickStatus(leadId, status) {
-    try {
-      await API.patch(`/leads/${leadId}/status`, { status });
-      setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, status } : l)));
-    } catch (e) {
-      console.error('Failed to update status', e);
-    }
+  function toggleSelect(leadId) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(leadId)) next.delete(leadId);
+      else next.add(leadId);
+      return next;
+    });
   }
+
+  function toggleSelectAll() {
+    setSelectedIds(allSelected ? new Set() : new Set(leads.map((l) => l.id)));
+  }
+
+  function clearSelection() { setSelectedIds(new Set()); }
 
   async function deleteLead(leadId) {
     if (!window.confirm('Delete this lead?')) return;
@@ -145,23 +164,6 @@ export default function LeadsTable({ campaignId, refreshToken }) {
       setScrapingIds((prev) => { const next = new Set(prev); next.delete(leadId); return next; });
     }
   }
-
-  const allSelected = leads.length > 0 && leads.every((l) => selectedIds.has(l.id));
-
-  function toggleSelect(leadId) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(leadId)) next.delete(leadId);
-      else next.add(leadId);
-      return next;
-    });
-  }
-
-  function toggleSelectAll() {
-    setSelectedIds(allSelected ? new Set() : new Set(leads.map((l) => l.id)));
-  }
-
-  function clearSelection() { setSelectedIds(new Set()); }
 
   async function bulkSetStatus(status) {
     const ids = [...selectedIds];
@@ -212,30 +214,18 @@ export default function LeadsTable({ campaignId, refreshToken }) {
   async function bulkEnrichViaMaps() {
     const ids = [...selectedIds];
     const targets = leads.filter((l) => ids.includes(l.id) && l.mapsUri);
-    if (targets.length === 0) {
-      window.alert('No selected leads have a Google Maps URL.');
-      return;
-    }
+    if (targets.length === 0) { window.alert('No selected leads have a Google Maps URL.'); return; }
     if (!window.confirm(`Open ${targets.length} Maps tabs sequentially to enrich? Keep the browser open.`)) return;
 
     setBulkWorking(true);
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-    const backendBase = apiBase.replace(/\/api\/?$/, '');
+    const backendBase = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/api\/?$/, '');
 
     try {
       for (let i = 0; i < targets.length; i++) {
         const lead = targets[i];
         setBulkProgress(`Enriching ${i + 1}/${targets.length}: ${lead.name}`);
         const startedAt = new Date(lead.lastMapsSyncAt || 0).getTime();
-
-        window.postMessage({
-          type: 'rp_enrich_request',
-          leadId: lead.id,
-          mapsUrl: lead.mapsUri,
-          apiBase: backendBase,
-        }, window.location.origin);
-
-        // Poll this lead until lastMapsSyncAt updates or 60s timeout
+        window.postMessage({ type: 'rp_enrich_request', leadId: lead.id, mapsUrl: lead.mapsUri, apiBase: backendBase }, window.location.origin);
         const deadline = Date.now() + 60_000;
         while (Date.now() < deadline) {
           await new Promise((r) => setTimeout(r, 2000));
@@ -244,12 +234,7 @@ export default function LeadsTable({ campaignId, refreshToken }) {
             if (new Date(data.lastMapsSyncAt || 0).getTime() > startedAt) break;
           } catch {}
         }
-
-        // Random 3-5s delay between leads
-        if (i < targets.length - 1) {
-          const delay = 3000 + Math.random() * 2000;
-          await new Promise((r) => setTimeout(r, delay));
-        }
+        if (i < targets.length - 1) await new Promise((r) => setTimeout(r, 3000 + Math.random() * 2000));
       }
       setBulkProgress(null);
       clearSelection();
@@ -258,135 +243,116 @@ export default function LeadsTable({ campaignId, refreshToken }) {
     }
   }
 
-  if (fetching && leads.length === 0) return <p className="text-muted">Loading leads...</p>;
+  if (fetching && leads.length === 0) return <p className="text-muted">Loading leads…</p>;
   if (!fetching && total === 0 && !filtersActive) return <p className="text-muted">No leads yet.</p>;
 
   return (
     <>
+      {/* ── Status pills + name filter ── */}
+      <div className="d-flex align-items-center gap-2 mb-3 flex-wrap">
+        <input
+          className="form-control form-control-sm"
+          style={{ maxWidth: 200 }}
+          placeholder="Search name…"
+          value={nameFilter}
+          onChange={(e) => setNameFilter(e.target.value)}
+        />
+        <div className="d-flex gap-1 flex-wrap">
+          {ALL_STATUSES.map((s) => {
+            const active = activeStatuses.has(s);
+            const style = active
+              ? { ...STATUS_STYLES[s], fontWeight: 600, fontSize: '0.75rem', padding: '3px 9px', borderRadius: 4, cursor: 'pointer', userSelect: 'none' }
+              : { background: 'transparent', color: '#9ca3af', border: '1px solid #e5e7eb', fontWeight: 500, fontSize: '0.75rem', padding: '3px 9px', borderRadius: 4, cursor: 'pointer', userSelect: 'none' };
+            return (
+              <span key={s} style={style} onClick={() => toggleStatus(s)}>
+                {statusLabel(s)}
+              </span>
+            );
+          })}
+        </div>
+        {filtersActive && (
+          <button className="btn btn-sm btn-link text-danger p-0 ms-1" onClick={clearFilters}>✕ Clear</button>
+        )}
+      </div>
+
+      {/* ── Bulk action bar ── */}
       {selectedIds.size > 0 && (
-        <div className="d-flex align-items-center gap-2 mb-2 px-1 py-2 rounded" style={{ background: '#e8f0fe', fontSize: '0.85rem' }}>
+        <div className="d-flex align-items-center gap-2 mb-2 px-2 py-2 rounded" style={{ background: '#eff6ff', fontSize: '0.82rem' }}>
           <span className="fw-semibold">{selectedIds.size} selected</span>
-          <button className="btn btn-sm btn-outline-primary" onClick={bulkRescrape}>↻ Re-scrape</button>
+          <button className="btn btn-sm btn-outline-secondary" onClick={bulkRescrape}>↻ Re-scrape</button>
           <button className="btn btn-sm btn-outline-secondary" onClick={() => bulkSetStatus('QUEUED')} disabled={bulkWorking}>Queue</button>
-          <button className="btn btn-sm btn-outline-success" onClick={() => bulkSetStatus('CONTACTED')} disabled={bulkWorking}>Mark contacted</button>
-          <button className="btn btn-sm btn-outline-warning" onClick={() => bulkSetStatus('ARCHIVED')} disabled={bulkWorking}>Archive</button>
-          <button className="btn btn-sm btn-outline-info" onClick={bulkEnrichViaMaps} disabled={bulkWorking}>
-            Enrich via Maps ({selectedIds.size})
-          </button>
+          <button className="btn btn-sm btn-outline-secondary" onClick={() => bulkSetStatus('CONTACTED')} disabled={bulkWorking}>Mark contacted</button>
+          <button className="btn btn-sm btn-outline-secondary" onClick={() => bulkSetStatus('ARCHIVED')} disabled={bulkWorking}>Archive</button>
+          <button className="btn btn-sm btn-outline-secondary" onClick={bulkEnrichViaMaps} disabled={bulkWorking}>Enrich via Maps</button>
           <button className="btn btn-sm btn-outline-danger" onClick={bulkDelete} disabled={bulkWorking}>Delete</button>
-          <button className="btn btn-sm btn-link text-secondary p-0 ms-1" onClick={clearSelection}>✕</button>
+          <button className="btn btn-sm btn-link text-secondary p-0 ms-auto" onClick={clearSelection}>✕</button>
           {bulkProgress && <span className="text-muted ms-2">{bulkProgress}</span>}
         </div>
       )}
 
+      {/* ── Table ── */}
       <div className="table-responsive w-100">
-        <table className="table table-sm table-hover align-middle" style={{ fontSize: '0.82rem' }}>
-          <thead className="table-light">
+        <table className="table table-sm table-hover align-middle mb-0">
+          <thead>
             <tr>
-              <th style={{ width: 36, position: 'sticky', top: 0, background: '#f8f9fa' }}>
-                <input type="checkbox" ref={selectAllRef} checked={allSelected} onChange={toggleSelectAll} title="Select all visible" />
+              <th style={{ width: 36 }}>
+                <input type="checkbox" ref={selectAllRef} checked={allSelected} onChange={toggleSelectAll} />
               </th>
-              <SortTh col="name"     label="Name"     sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ minWidth: 180, position: 'sticky', left: 0, zIndex: 2, background: '#f8f9fa' }} />
-              <SortTh col="status"   label="Status"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ minWidth: 100 }} />
-              <SortTh col="score"    label="Score"    sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ minWidth: 70 }} />
-              <SortTh col="email"    label="Email"    sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ minWidth: 180 }} />
-              <SortTh col="phone"    label="Phone"    sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ minWidth: 130 }} />
-              <SortTh col="facebook" label="Facebook" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ minWidth: 160 }} />
-              <SortTh col="maps"     label="Maps"     sortCol={sortCol} sortDir={sortDir} onSort={handleSort} style={{ minWidth: 60 }} />
-              <th style={{ minWidth: 110, position: 'sticky', top: 0, background: '#f8f9fa', color: '#6c757d', fontWeight: 400, fontSize: '0.75em', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Actions</th>
-            </tr>
-            <tr style={{ borderTop: '2px solid #dee2e6', background: '#fdfdfd' }}>
-              <td style={{ position: 'sticky', top: 30, background: '#fdfdfd' }} />
-              <td style={{ position: 'sticky', top: 30, left: 0, background: '#fdfdfd' }}>
-                <input className="form-control form-control-sm" placeholder="Search name..." value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} />
-              </td>
-              <td style={{ position: 'sticky', top: 30, background: '#fdfdfd' }}>
-                <select className="form-select form-select-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                  <option value="">All statuses</option>
-                  <option value="QUALIFIED">Qualified</option>
-                  <option value="QUEUED">Queued</option>
-                  <option value="CONTACTED">Contacted</option>
-                  <option value="REPLIED">Replied</option>
-                  <option value="WON">Won</option>
-                  <option value="ARCHIVED">Archived</option>
-                </select>
-              </td>
-              <td style={{ position: 'sticky', top: 30, background: '#fdfdfd' }}>
-                <select className="form-select form-select-sm" value={scoreFilter} onChange={(e) => setScoreFilter(e.target.value)}>
-                  <option value="">Any score</option>
-                  <option value="has">Has score</option>
-                  <option value="empty">No score</option>
-                  <option value="8">≥ 8</option>
-                  <option value="6">≥ 6</option>
-                  <option value="4">≥ 4</option>
-                </select>
-              </td>
-              <td style={{ position: 'sticky', top: 30, background: '#fdfdfd' }}><NullableFilter label="email"    value={emailFilter}    onChange={setEmailFilter} /></td>
-              <td style={{ position: 'sticky', top: 30, background: '#fdfdfd' }}><NullableFilter label="phone"    value={phoneFilter}    onChange={setPhoneFilter} /></td>
-              <td style={{ position: 'sticky', top: 30, background: '#fdfdfd' }}><NullableFilter label="Facebook" value={facebookFilter} onChange={setFacebookFilter} /></td>
-              <td style={{ position: 'sticky', top: 30, background: '#fdfdfd' }}><NullableFilter label="link"     value={mapsFilter}     onChange={setMapsFilter} /></td>
-              <td style={{ position: 'sticky', top: 30, background: '#fdfdfd' }} className="align-middle">
-                {filtersActive && (
-                  <button className="btn btn-sm btn-link text-danger p-0 text-nowrap" onClick={clearFilters}>✕ Clear</button>
-                )}
-              </td>
+              <th style={{ minWidth: 180 }}>Name</th>
+              <th style={{ minWidth: 100 }}>Status</th>
+              <th style={{ minWidth: 80 }}>Score</th>
+              <th style={{ minWidth: 120 }}>Phone</th>
+              <th style={{ minWidth: 60 }}>Maps</th>
+              <th style={{ minWidth: 90 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {leads.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-muted text-center py-3">No leads match the current filters.</td>
+                <td colSpan={7} className="text-muted text-center py-4">No leads match the current filters.</td>
               </tr>
             ) : (
               leads.map((lead) => (
                 <tr key={lead.id}>
-                  <td style={{ width: 36 }}>
+                  <td>
                     <input type="checkbox" checked={selectedIds.has(lead.id)} onChange={() => toggleSelect(lead.id)} />
                   </td>
-                  <td style={{ position: 'sticky', left: 0, background: 'white', zIndex: 1 }}>
-                    <Link to={`/leads/${lead.id}`} className="text-decoration-none fw-semibold text-dark">{lead.name}</Link>
+                  <td>
+                    <Link to={`/leads/${lead.id}`} className="text-decoration-none fw-semibold text-dark">
+                      {lead.name}
+                    </Link>
                   </td>
                   <td><LeadStatusBadge status={lead.status} /></td>
-                  <td>{lead.icpFitScore != null ? <FitBadge score={lead.icpFitScore} /> : null}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                    {lead.email && <a href={`mailto:${lead.email}`} className="text-truncate d-block" style={{ maxWidth: 175 }} title={lead.email}>{lead.email}</a>}
+                  <td>
+                    {lead.icpFitScore != null && <FitBadge score={lead.icpFitScore} />}
+                    {lead.reviewCount != null && (
+                      <span className="text-muted ms-1" style={{ fontSize: '0.72rem' }}>· {lead.reviewCount}★</span>
+                    )}
                   </td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                    {lead.phone && <a href={`tel:${lead.phone}`}>{lead.phone}</a>}
+                  <td style={{ fontSize: '0.82rem' }}>
+                    {lead.phone && <a href={`tel:${lead.phone}`} className="text-decoration-none">{lead.phone}</a>}
                   </td>
                   <td>
-                    {lead.facebook && (
-                      <a href={lead.facebook} target="_blank" rel="noopener noreferrer" className="text-truncate d-block" style={{ maxWidth: 155 }} title={lead.facebook}>
-                        {lead.facebook.replace(/https?:\/\/(www\.)?/, '')}
-                      </a>
+                    {lead.mapsUri && (
+                      <button className="btn btn-sm btn-outline-secondary py-0 px-2" onClick={() => window.open(lead.mapsUri, lead.id)}>
+                        Maps
+                      </button>
                     )}
                   </td>
                   <td>
-                    {lead.mapsUri && <button className="btn btn-sm btn-outline-secondary py-0" onClick={() => window.open(lead.mapsUri, lead.id)}>Maps</button>}
-                  </td>
-                  <td>
                     <div className="d-flex gap-1">
-                      {lead.status === 'QUEUED' && (
-                        <button className="btn btn-sm btn-outline-secondary py-0 px-2" onClick={() => quickStatus(lead.id, 'CONTACTED')}>Contacted</button>
-                      )}
-                      {lead.status === 'CONTACTED' && (
-                        <button className="btn btn-sm btn-outline-warning py-0 px-2" onClick={() => quickStatus(lead.id, 'REPLIED')}>Replied</button>
-                      )}
-                      {(lead.status === 'CONTACTED' || lead.status === 'REPLIED') && (
-                        <button className="btn btn-sm btn-outline-success py-0 px-2" onClick={() => quickStatus(lead.id, 'WON')}>Won</button>
-                      )}
-                      <Link to={`/leads/${lead.id}`} className="btn btn-sm btn-outline-secondary py-0 px-2" title="Edit lead">✎</Link>
+                      <Link to={`/leads/${lead.id}`} className="btn btn-sm btn-outline-secondary py-0 px-2" title="Open lead">✎</Link>
                       <button
-                        className="btn btn-sm btn-outline-primary py-0 px-2"
+                        className="btn btn-sm btn-outline-secondary py-0 px-2"
                         onClick={() => reScrape(lead.id)}
                         disabled={scrapingIds.has(lead.id)}
-                        title="Re-fetch phone from Google Places + re-scrape website"
+                        title="Re-scrape"
                       >
                         {scrapingIds.has(lead.id)
                           ? <span className="spinner-border spinner-border-sm" style={{ width: '0.7rem', height: '0.7rem' }} />
                           : '↻'}
                       </button>
-                      <button className="btn btn-sm btn-outline-danger py-0 px-2" onClick={() => deleteLead(lead.id)} title="Delete lead">×</button>
+                      <button className="btn btn-sm btn-outline-danger py-0 px-2" onClick={() => deleteLead(lead.id)} title="Delete">×</button>
                     </div>
                   </td>
                 </tr>
@@ -396,12 +362,13 @@ export default function LeadsTable({ campaignId, refreshToken }) {
         </table>
       </div>
 
-      <div className="d-flex align-items-center justify-content-between mt-2" style={{ fontSize: '0.85rem' }}>
+      {/* ── Pagination ── */}
+      <div className="d-flex align-items-center justify-content-between mt-2" style={{ fontSize: '0.82rem' }}>
         <span className="text-muted">
           {total} lead{total !== 1 ? 's' : ''}
-          {filtersActive && ` (filtered)`}
+          {filtersActive && ' (filtered)'}
           {totalPages > 1 && ` · page ${page + 1}/${totalPages}`}
-          {fetching && ' · refreshing...'}
+          {fetching && ' · refreshing…'}
         </span>
         {totalPages > 1 && (
           <div className="d-flex gap-1">
@@ -417,44 +384,23 @@ export default function LeadsTable({ campaignId, refreshToken }) {
 }
 
 function LeadStatusBadge({ status }) {
-  const map = {
-    DISCOVERED: 'bg-info', ENRICHED: 'bg-info', QUALIFIED: 'bg-primary',
-    QUEUED: 'bg-success', CONTACTED: 'bg-secondary',
-    REPLIED: 'bg-warning text-dark', WON: 'bg-success', ARCHIVED: 'bg-dark',
-  };
-  return <span className={`badge ${map[status] || 'bg-secondary'}`}>{status}</span>;
-}
-
-function FitBadge({ score }) {
-  let cls = 'bg-secondary';
-  if (score >= 8) cls = 'bg-success';
-  else if (score >= 6) cls = 'bg-primary';
-  else if (score >= 4) cls = 'bg-warning text-dark';
-  else cls = 'bg-danger';
-  return <span className={`badge ${cls}`}>{score}/10</span>;
-}
-
-function NullableFilter({ label, value, onChange }) {
+  const s = STATUS_STYLES[status] || { bg: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db' };
   return (
-    <select className="form-select form-select-sm" value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">Any</option>
-      <option value="has">Has {label}</option>
-      <option value="empty">No {label}</option>
-    </select>
+    <span style={{ background: s.bg, color: s.color, border: s.border, borderRadius: 4, padding: '2px 7px', fontSize: '0.72rem', fontWeight: 600 }}>
+      {statusLabel(status)}
+    </span>
   );
 }
 
-function SortTh({ col, label, sortCol, sortDir, onSort, style }) {
-  const active = sortCol === col;
+function FitBadge({ score }) {
+  let bg = '#6b7280', color = '#fff';
+  if (score >= 8)      { bg = '#16a34a'; }
+  else if (score >= 6) { bg = '#2563eb'; }
+  else if (score >= 4) { bg = '#f59e0b'; color = '#1c1917'; }
+  else                 { bg = '#dc2626'; }
   return (
-    <th
-      style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: '#f8f9fa', ...style }}
-      onClick={() => onSort(col)}
-    >
-      {label}
-      <span className="ms-1" style={{ fontSize: '0.7em', opacity: active ? 1 : 0.35 }}>
-        {active ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}
-      </span>
-    </th>
+    <span style={{ background: bg, color, borderRadius: 4, padding: '2px 6px', fontSize: '0.72rem', fontWeight: 600 }}>
+      {score}/10
+    </span>
   );
 }

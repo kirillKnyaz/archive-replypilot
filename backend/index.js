@@ -83,6 +83,7 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/leads', authenticate, require('./routes/leads'));
+app.use('/api/leads/:id/reaches', authenticate, require('./routes/reaches'));
 app.use('/api/search', authenticate, require('./routes/search'));
 app.use('/api/lists', authenticate, require('./routes/lists'));
 app.use('/api/campaigns', authenticate, require('./routes/campaigns'));

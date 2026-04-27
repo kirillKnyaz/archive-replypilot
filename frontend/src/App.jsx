@@ -12,6 +12,7 @@ import RegisterPage from './pages/auth/RegisterPage';
 import CampaignListPage from './pages/campaigns/CampaignListPage';
 import CampaignSetupPage from './pages/campaigns/CampaignSetupPage';
 import CampaignDetailPage from './pages/campaigns/CampaignDetailPage';
+import CampaignConfigPage from './pages/campaigns/CampaignConfigPage';
 import LeadPage from './pages/leads/LeadPage';
 import PricingPage from './pages/billing/PricingPage';
 import BillingPage from './pages/billing/BillingPage';
@@ -47,6 +48,7 @@ export default function App() {
                 <Route path="/campaigns" element={<ProtectedRoute><CampaignListPage /></ProtectedRoute>} />
                 <Route path="/campaigns/:id" element={<ProtectedRoute><CampaignDetailPage /></ProtectedRoute>} />
                 <Route path="/campaigns/:id/setup" element={<ProtectedRoute><CampaignSetupPage /></ProtectedRoute>} />
+                <Route path="/campaigns/:id/config" element={<ProtectedRoute><CampaignConfigPage /></ProtectedRoute>} />
                 <Route path="/leads/:id" element={<ProtectedRoute><LeadPage /></ProtectedRoute>} />
 
                 <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
