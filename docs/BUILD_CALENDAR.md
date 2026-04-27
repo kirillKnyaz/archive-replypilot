@@ -2,7 +2,7 @@
 
 One feature per day. Each day has a clear spec, the files that change, and what "done" looks like.
 
-**Status:** Days 1-4 shipped. Day 5 (discovery-from-Maps mode) is next. Original Day 3 (website quality) merges into Day 6 alongside Maps data.
+**Status:** Days 1-9 shipped. Day 10 (user override tracking) is next.
 
 ---
 
@@ -687,11 +687,11 @@ Bootstrap tables + colored badges. No chart library.
 | 2 | Qualify threshold + requalify button | ✓ DONE |
 | 3 | Location grid + query rotation | ✓ DONE |
 | 4 | Browser extension Mode 1 (app-triggered Maps enrichment) | ✓ DONE |
-| 5 | Browser extension Mode 2 (discovery from Maps) | Next |
-| 6 | Lead quality signals (HTML + Maps) in qualification | — |
-| 7 | Reach model + API | — |
-| 8 | Reach log UI on LeadPage | — |
-| 9 | Next-action logic + follow-up queue | — |
+| 5 | Browser extension Mode 2 (discovery from Maps) | ✓ DONE |
+| 6 | Lead quality signals (HTML + Maps) in qualification | ✓ DONE |
+| 7 | Reach model + API | ✓ DONE |
+| 8 | Reach log UI on LeadPage + UI rebuild | ✓ DONE |
+| 9 | Next-action logic + follow-up queue | ✓ DONE |
 | 10 | User override tracking | — |
 | 11 | qualificationGuide + campaign cloning | — |
 | 12 | Reach-aware message generation | — |

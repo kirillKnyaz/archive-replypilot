@@ -1,5 +1,6 @@
 const router = require('express').Router({ mergeParams: true });
 const prisma = require('../lib/prisma');
+const { computeNextFollowUp } = require('../service/nextAction');
 
 // POST /api/leads/:id/reaches — log a new reach attempt
 router.post('/', async (req, res) => {
@@ -25,16 +26,22 @@ router.post('/', async (req, res) => {
     },
   });
 
-  await prisma.lead.update({
-    where: { id: leadId },
-    data: {
-      lastReachedAt: reach.createdAt,
-      followUpCount: { increment: 1 },
-      activeChannel: channel,
-    },
-  });
+  const newReachCount = (lead.followUpCount || 0) + 1;
+  const { nextFollowUpAt, suggestedAction } = computeNextFollowUp({ channel, result, reachCount: newReachCount });
 
-  res.status(201).json(reach);
+  const leadUpdate = {
+    lastReachedAt: reach.createdAt,
+    followUpCount: { increment: 1 },
+    activeChannel: channel,
+    nextFollowUpAt,
+  };
+  if (result === 'NEGATIVE' || result === 'DO_NOT_CONTACT') {
+    leadUpdate.lostReason = result;
+  }
+
+  await prisma.lead.update({ where: { id: leadId }, data: leadUpdate });
+
+  res.status(201).json({ ...reach, suggestedAction });
 });
 
 // GET /api/leads/:id/reaches — list all reaches for a lead, newest first

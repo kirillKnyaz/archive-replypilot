@@ -1,15 +1,24 @@
 import { Link, Outlet } from 'react-router-dom';
 import useAuth from './hooks/useAuth';
-import {  useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import UserMenu from './components/dashboard/UserMenu';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPaperPlane } from '@fortawesome/free-solid-svg-icons';
 import gsap from 'gsap';
 import { MotionPathPlugin } from 'gsap/MotionPathPlugin';
+import API from './api';
 gsap.registerPlugin(MotionPathPlugin);
 
 function Layout() {
   const { user, authenticated, loading, logout } = useAuth();
+  const [queueCount, setQueueCount] = useState(0);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    API.get('/leads/action-queue')
+      .then(({ data }) => setQueueCount(data.total))
+      .catch(() => {});
+  }, [authenticated]);
 
   useEffect(() => {
     const icon = document.querySelector('.plane-icon');
@@ -69,9 +78,20 @@ function Layout() {
           </span>
         </Link>
 
-        {authenticated ? (<>
-          <UserMenu /> 
-        </>) : (
+        {authenticated ? (
+          <div className="d-flex align-items-center gap-2">
+            <Link to="/queue" className="position-relative btn btn-sm btn-outline-secondary">
+              Queue
+              {queueCount > 0 && (
+                <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                  style={{ fontSize: '0.6rem' }}>
+                  {queueCount}
+                </span>
+              )}
+            </Link>
+            <UserMenu />
+          </div>
+        ) : (
           <Link to="/login" className="btn btn-primary">Login</Link>
         )}
       </div>

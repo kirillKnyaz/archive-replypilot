@@ -5,49 +5,41 @@ import API from "../../api";
 const CHANNELS = ["EMAIL", "PHONE", "DM", "DROP_IN"];
 const CHANNEL_LABELS = { EMAIL: "Email", PHONE: "Phone", DM: "DM", DROP_IN: "Drop-in" };
 
-const COMMON_RESULTS = ["NO_ANSWER", "VOICEMAIL", "POSITIVE", "NEGATIVE", "FOLLOW_UP_REQUESTED", "NOT_NOW"];
-const RARE_RESULTS   = ["GATEKEEPER", "CONVERSATION", "DO_NOT_CONTACT"];
-const RESULT_LABELS  = {
+const COMMON_RESULTS  = ["NO_ANSWER", "VOICEMAIL", "POSITIVE", "NEGATIVE", "FOLLOW_UP_REQUESTED", "NOT_NOW"];
+const RARE_RESULTS    = ["GATEKEEPER", "CONVERSATION", "DO_NOT_CONTACT"];
+const RESULT_LABELS   = {
   NO_ANSWER: "No answer", VOICEMAIL: "Voicemail", POSITIVE: "Positive",
-  NEGATIVE: "Negative", FOLLOW_UP_REQUESTED: "Follow-up requested",
-  NOT_NOW: "Not now", GATEKEEPER: "Gatekeeper",
-  CONVERSATION: "Conversation", DO_NOT_CONTACT: "Do not contact",
+  NEGATIVE: "Negative", FOLLOW_UP_REQUESTED: "Follow-up requested", NOT_NOW: "Not now",
+  GATEKEEPER: "Gatekeeper", CONVERSATION: "Conversation", DO_NOT_CONTACT: "Do not contact",
 };
 
 export default function LeadPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [lead, setLead]           = useState(null);
-  const [loading, setLoading]     = useState(true);
-  const [message, setMessage]     = useState("");
-  const [messageDirty, setMessageDirty] = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [copied, setCopied]       = useState(false);
-  const [enriching, setEnriching] = useState(false);
-  const [enrichStatus, setEnrichStatus] = useState(null);
+  const [lead, setLead]                   = useState(null);
+  const [loading, setLoading]             = useState(true);
+  const [message, setMessage]             = useState("");
+  const [messageDirty, setMessageDirty]   = useState(false);
+  const [saving, setSaving]               = useState(false);
+  const [copied, setCopied]               = useState(false);
+  const [enriching, setEnriching]         = useState(false);
+  const [enrichStatus, setEnrichStatus]   = useState(null);
 
-  // Reach log state
-  const [reaches, setReaches]           = useState([]);
-  const [reachChannel, setReachChannel] = useState("PHONE");
-  const [reachResult, setReachResult]   = useState(null);
-  const [transcript, setTranscript]     = useState("");
+  const [reaches, setReaches]             = useState([]);
+  const [reachChannel, setReachChannel]   = useState("PHONE");
+  const [reachResult, setReachResult]     = useState(null);
+  const [transcript, setTranscript]       = useState("");
   const [showTranscript, setShowTranscript] = useState(false);
-  const [loggingReach, setLoggingReach] = useState(false);
+  const [loggingReach, setLoggingReach]   = useState(false);
   const [expandedReach, setExpandedReach] = useState(null);
 
   useEffect(() => {
     API.get(`/leads/${id}`)
-      .then(({ data }) => {
-        setLead(data);
-        setMessage(data.generatedMessage || "");
-      })
+      .then(({ data }) => { setLead(data); setMessage(data.generatedMessage || ""); })
       .catch(() => navigate("/"))
       .finally(() => setLoading(false));
-
-    API.get(`/leads/${id}/reaches`)
-      .then(({ data }) => setReaches(data))
-      .catch(() => {});
+    API.get(`/leads/${id}/reaches`).then(({ data }) => setReaches(data)).catch(() => {});
   }, [id]);
 
   async function updateStatus(status) {
@@ -74,25 +66,18 @@ export default function LeadPage() {
   async function enrichViaMaps() {
     if (!lead.mapsUri) return;
     const startedAt = new Date(lead.lastMapsSyncAt || 0).getTime();
-    const apiBase = (import.meta.env.VITE_API_URL || "http://localhost:3001/api").replace(/\/api\/?$/, "");
-    window.postMessage({ type: "rp_enrich_request", leadId: lead.id, mapsUrl: lead.mapsUri, apiBase }, window.location.origin);
+    const backendBase = (import.meta.env.VITE_API_URL || "http://localhost:3001/api").replace(/\/api\/?$/, "");
+    window.postMessage({ type: "rp_enrich_request", leadId: lead.id, mapsUrl: lead.mapsUri, apiBase: backendBase }, window.location.origin);
     setEnriching(true);
     setEnrichStatus("Capturing… (make sure the extension is installed)");
     const deadline = Date.now() + 60_000;
     const poll = async () => {
-      if (Date.now() > deadline) {
-        setEnriching(false);
-        setEnrichStatus("Timed out — extension not installed or selectors failed.");
-        return;
-      }
+      if (Date.now() > deadline) { setEnriching(false); setEnrichStatus("Timed out."); return; }
       try {
         const { data } = await API.get(`/leads/${id}`);
         if (new Date(data.lastMapsSyncAt || 0).getTime() > startedAt) {
-          setLead(data);
-          setEnriching(false);
-          setEnrichStatus("Enrichment complete.");
-          setTimeout(() => setEnrichStatus(null), 3000);
-          return;
+          setLead(data); setEnriching(false); setEnrichStatus("Done.");
+          setTimeout(() => setEnrichStatus(null), 3000); return;
         }
       } catch {}
       setTimeout(poll, 2000);
@@ -105,54 +90,49 @@ export default function LeadPage() {
     setLoggingReach(true);
     try {
       const { data } = await API.post(`/leads/${id}/reaches`, {
-        channel: reachChannel,
-        result: reachResult,
-        transcript: transcript || undefined,
+        channel: reachChannel, result: reachResult, transcript: transcript || undefined,
       });
       setReaches((prev) => [data, ...prev]);
       setLead((prev) => ({ ...prev, followUpCount: (prev.followUpCount || 0) + 1, lastReachedAt: data.createdAt, activeChannel: reachChannel }));
-      setReachResult(null);
-      setTranscript("");
-      setShowTranscript(false);
+      setReachResult(null); setTranscript(""); setShowTranscript(false);
     } finally {
       setLoggingReach(false);
     }
   }
 
-  if (loading) return <div className="container py-4"><p className="text-muted">Loading…</p></div>;
+  if (loading) return <div className="container-fluid py-4 px-4"><p className="text-muted">Loading…</p></div>;
   if (!lead) return null;
 
   const contacts = [
-    lead.email    && { label: "Email",     href: `mailto:${lead.email}`,  value: lead.email },
-    lead.phone    && { label: "Phone",     href: `tel:${lead.phone}`,     value: lead.phone },
+    lead.email     && { label: "Email",     href: `mailto:${lead.email}`,  value: lead.email },
+    lead.phone     && { label: "Phone",     href: `tel:${lead.phone}`,     value: lead.phone },
     lead.instagram && { label: "Instagram", href: lead.instagram,          value: lead.instagram },
     lead.facebook  && { label: "Facebook",  href: lead.facebook,           value: lead.facebook },
     lead.tiktok    && { label: "TikTok",    href: lead.tiktok,             value: lead.tiktok },
   ].filter(Boolean);
 
   return (
-    <div className="container py-4" style={{ maxWidth: 900 }}>
-      <button className="btn btn-link btn-sm p-0 mb-3 text-muted text-decoration-none" onClick={() => navigate(-1)}>
-        ← Back
-      </button>
+    <div className="container-fluid py-4 px-4">
 
       {/* ── Header ── */}
       <div className="d-flex justify-content-between align-items-start mb-1">
-        <div>
-          <h4 className="mb-1">{lead.name}</h4>
-          <div className="text-muted" style={{ fontSize: "0.88rem" }}>
-            {lead.type && <span>{lead.type} · </span>}
-            <span>{lead.location}</span>
+        <div className="d-flex align-items-center gap-2">
+          <button className="btn btn-sm btn-outline-secondary" onClick={() => navigate(-1)}>←</button>
+          <div>
+            <h5 className="mb-0">{lead.name}</h5>
+            <div className="text-muted" style={{ fontSize: "0.83rem" }}>
+              {lead.type && <span>{lead.type} · </span>}{lead.location}
+            </div>
           </div>
         </div>
-        <div className="d-flex gap-2 align-items-center flex-wrap">
+        <div className="d-flex align-items-center gap-2 flex-wrap">
           {lead.icpFitScore != null && <FitBadge score={lead.icpFitScore} />}
           <LeadStatusBadge status={lead.status} />
         </div>
       </div>
 
       {lead.campaign && (
-        <div className="mb-3" style={{ fontSize: "0.83rem" }}>
+        <div className="mb-3 ms-5" style={{ fontSize: "0.82rem" }}>
           <Link to={`/campaigns/${lead.campaign.id}`} className="text-decoration-none text-muted">
             {lead.campaign.name}
           </Link>
@@ -160,273 +140,131 @@ export default function LeadPage() {
         </div>
       )}
 
-      {/* ── Fit reason ── */}
-      {lead.icpFitReason && (
-        <div className="mb-3 text-muted" style={{ fontSize: "0.85rem", borderLeft: "3px solid #e5e7eb", paddingLeft: 12 }}>
-          {lead.icpFitReason}
-        </div>
-      )}
-
-      {lead.noContactFound && (
-        <div className="alert alert-warning py-2 px-3 mb-3" style={{ fontSize: "0.85rem" }}>
-          No contact found — consider visiting in person.
-        </div>
-      )}
-
-      {/* ── Action buttons ── */}
+      {/* ── Action bar ── */}
       <div className="d-flex gap-2 mb-4 flex-wrap align-items-center">
         {lead.status !== "CONTACTED" && (
           <button className="btn btn-sm btn-outline-success" onClick={() => updateStatus("CONTACTED")}>Mark contacted</button>
         )}
         {lead.status === "CONTACTED" && (
-          <button className="btn btn-sm btn-outline-secondary" onClick={() => updateStatus("QUEUED")}>Move back to queue</button>
+          <button className="btn btn-sm btn-outline-secondary" onClick={() => updateStatus("QUEUED")}>Move to queue</button>
         )}
         {lead.status !== "ARCHIVED" && (
           <button className="btn btn-sm btn-outline-secondary" onClick={() => updateStatus("ARCHIVED")}>Archive</button>
         )}
         {lead.status === "ARCHIVED" && (
-          <button className="btn btn-sm btn-outline-primary" onClick={() => updateStatus("QUEUED")}>Restore to queue</button>
+          <button className="btn btn-sm btn-outline-primary" onClick={() => updateStatus("QUEUED")}>Restore</button>
         )}
         {lead.website && (
           <div className="d-flex align-items-center gap-1">
-            <a href={lead.website} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-secondary">
-              Website ↗
-            </a>
-            {lead.websiteQuality != null && (
-              <WebsiteQualityBadge score={lead.websiteQuality} reason={lead.websiteQualityReason} />
-            )}
+            <a href={lead.website} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-secondary">Website ↗</a>
+            {lead.websiteQuality != null && <WebsiteQualityBadge score={lead.websiteQuality} reason={lead.websiteQualityReason} />}
           </div>
         )}
-        {lead.mapsUri && (
-          <a href={lead.mapsUri} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-secondary">Maps ↗</a>
-        )}
+        {lead.mapsUri && <a href={lead.mapsUri} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-secondary">Maps ↗</a>}
         {lead.mapsUri && (
           <button className="btn btn-sm btn-outline-primary" onClick={enrichViaMaps} disabled={enriching}>
             {enriching ? "Enriching…" : "Enrich via Maps"}
           </button>
         )}
+        {enrichStatus && <span className="text-muted" style={{ fontSize: "0.82rem" }}>{enrichStatus}</span>}
+        {lead.noContactFound && <span className="badge bg-warning text-dark">No contact found</span>}
       </div>
-      {enrichStatus && (
-        <div className="alert alert-info py-2 px-3 mb-3" style={{ fontSize: "0.85rem" }}>{enrichStatus}</div>
-      )}
 
-      {/* ── Main two-column layout ── */}
-      <div className="row g-3">
+      {/* ── Work area: reach log (left) + message (right) ── */}
+      <div className="row g-3 mb-3">
 
-        {/* LEFT — contact + maps + business */}
+        {/* Left 40% — reach log */}
         <div className="col-md-5">
-          <div className="card mb-3">
-            <div className="card-body">
-              <h6 className="card-title mb-3">Contact</h6>
-              {contacts.length === 0 ? (
-                <p className="text-muted mb-0" style={{ fontSize: "0.85rem" }}>No contact info found.</p>
-              ) : (
-                <div className="d-flex flex-column gap-2">
-                  {contacts.map((c) => (
-                    <div key={c.label} style={{ fontSize: "0.85rem" }}>
-                      <span className="text-muted me-2" style={{ minWidth: 70, display: "inline-block" }}>{c.label}</span>
-                      <a href={c.href} target="_blank" rel="noopener noreferrer" className="text-break">{c.value}</a>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {lead.lastMapsSyncAt && (
-            <div className="card mb-3">
-              <div className="card-body">
-                <h6 className="card-title mb-3">Google Maps</h6>
-                <div style={{ fontSize: "0.85rem" }}>
-                  {lead.reviewCount != null && (
-                    <div className="mb-1">
-                      <strong>{lead.reviewCount}</strong> reviews
-                      {lead.reviewAvg != null && <> · <strong>{lead.reviewAvg}</strong> avg</>}
-                    </div>
-                  )}
-                  {lead.photoCount != null && <div className="mb-1">{lead.photoCount} photos</div>}
-                  {lead.ownerClaimed != null && (
-                    <div className="mb-1">
-                      Owner: {lead.ownerClaimed ? "claimed" : "unclaimed"}
-                      {lead.ownerResponseRate != null && <> · {Math.round(lead.ownerResponseRate * 100)}% response rate</>}
-                    </div>
-                  )}
-                  {lead.hoursText && <div className="text-muted mt-2">{lead.hoursText}</div>}
-                  {lead.attributes?.length > 0 && (
-                    <div className="d-flex flex-wrap gap-1 mt-2">
-                      {lead.attributes.map((a) => (
-                        <span key={a} className="badge bg-light text-dark border" style={{ fontSize: "0.72rem" }}>{a}</span>
-                      ))}
-                    </div>
-                  )}
-                  {Array.isArray(lead.reviewSamples) && lead.reviewSamples.length > 0 && (
-                    <details className="mt-2">
-                      <summary className="text-muted" style={{ cursor: "pointer" }}>
-                        Reviews ({lead.reviewSamples.length})
-                      </summary>
-                      <div className="mt-2 d-flex flex-column gap-2">
-                        {lead.reviewSamples.map((r, i) => (
-                          <div key={i} className="border-start ps-2" style={{ borderColor: "#e5e7eb" }}>
-                            <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-                              {r.author || "Anonymous"}{r.rating ? ` · ${r.rating}/5` : ""}
-                            </div>
-                            <div>{r.text}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="card">
-            <div className="card-body">
-              <h6 className="card-title mb-3">Business</h6>
-              {lead.description && (
-                <p style={{ fontSize: "0.85rem" }} className="mb-2">{lead.description}</p>
-              )}
-              {lead.keywords?.length > 0 && (
-                <div className="d-flex flex-wrap gap-1">
-                  {lead.keywords.map((k) => (
-                    <span key={k} className="badge bg-light text-dark border" style={{ fontSize: "0.75rem" }}>{k}</span>
-                  ))}
-                </div>
-              )}
-              {!lead.description && !lead.keywords?.length && (
-                <p className="text-muted mb-0" style={{ fontSize: "0.85rem" }}>No details enriched yet.</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT — reach log + message */}
-        <div className="col-md-7">
-
-          {/* Log a reach */}
-          <div className="card mb-3">
-            <div className="card-body">
+          <div className="card h-100">
+            <div className="card-body d-flex flex-column">
               <h6 className="card-title mb-3">
                 Log a reach
                 {lead.followUpCount > 0 && (
-                  <span className="text-muted fw-normal ms-2" style={{ fontSize: "0.8rem" }}>
-                    {lead.followUpCount} logged
-                  </span>
+                  <span className="text-muted fw-normal ms-2" style={{ fontSize: "0.78rem" }}>{lead.followUpCount} logged</span>
                 )}
               </h6>
 
               {/* Channel */}
               <div className="d-flex gap-1 mb-2 flex-wrap">
                 {CHANNELS.map((ch) => (
-                  <button
-                    key={ch}
+                  <button key={ch}
                     className={`btn btn-sm ${reachChannel === ch ? "btn-primary" : "btn-outline-secondary"}`}
-                    onClick={() => setReachChannel(ch)}
-                  >
+                    onClick={() => setReachChannel(ch)}>
                     {CHANNEL_LABELS[ch]}
                   </button>
                 ))}
               </div>
 
-              {/* Result — common */}
+              {/* Common results */}
               <div className="d-flex gap-1 mb-2 flex-wrap">
                 {COMMON_RESULTS.map((r) => (
-                  <button
-                    key={r}
+                  <button key={r}
                     className={`btn btn-sm ${reachResult === r ? "btn-dark" : "btn-outline-secondary"}`}
-                    style={{ fontSize: "0.78rem" }}
-                    onClick={() => setReachResult(r)}
-                  >
+                    style={{ fontSize: "0.76rem" }}
+                    onClick={() => setReachResult(r)}>
                     {RESULT_LABELS[r]}
                   </button>
                 ))}
               </div>
 
-              {/* Result — rare */}
-              <select
-                className="form-select form-select-sm mb-2"
-                style={{ width: "auto" }}
+              {/* Rare results */}
+              <select className="form-select form-select-sm mb-2" style={{ width: "auto" }}
                 value={RARE_RESULTS.includes(reachResult) ? reachResult : ""}
-                onChange={(e) => setReachResult(e.target.value || null)}
-              >
-                <option value="">More results…</option>
-                {RARE_RESULTS.map((r) => (
-                  <option key={r} value={r}>{RESULT_LABELS[r]}</option>
-                ))}
+                onChange={(e) => setReachResult(e.target.value || null)}>
+                <option value="">More…</option>
+                {RARE_RESULTS.map((r) => <option key={r} value={r}>{RESULT_LABELS[r]}</option>)}
               </select>
 
-              {/* Transcript */}
-              {!showTranscript ? (
-                <button className="btn btn-link btn-sm p-0 text-muted" onClick={() => setShowTranscript(true)}>
-                  + Add note
-                </button>
-              ) : (
-                <textarea
-                  className="form-control form-control-sm mb-2"
-                  rows={3}
-                  placeholder="Optional transcript or notes…"
-                  value={transcript}
-                  onChange={(e) => setTranscript(e.target.value)}
-                  autoFocus
-                />
-              )}
+              {!showTranscript
+                ? <button className="btn btn-link btn-sm p-0 text-muted mb-2" onClick={() => setShowTranscript(true)}>+ Add note</button>
+                : <textarea className="form-control form-control-sm mb-2" rows={2}
+                    placeholder="Optional notes…" value={transcript}
+                    onChange={(e) => setTranscript(e.target.value)} autoFocus />
+              }
 
-              <div className="mt-2">
-                <button
-                  className="btn btn-sm btn-primary"
-                  onClick={logReach}
-                  disabled={!reachResult || loggingReach}
-                >
-                  {loggingReach ? "Logging…" : "Log reach"}
-                </button>
-              </div>
+              <button className="btn btn-sm btn-primary mb-3" onClick={logReach} disabled={!reachResult || loggingReach}>
+                {loggingReach ? "Logging…" : "Log reach"}
+              </button>
+
+              {/* Reach history */}
+              {reaches.length > 0 && (
+                <div className="flex-grow-1" style={{ overflowY: "auto" }}>
+                  <div className="text-muted mb-2" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>History</div>
+                  <div className="d-flex flex-column gap-2">
+                    {reaches.map((r) => (
+                      <div key={r.id} style={{ fontSize: "0.82rem" }}>
+                        <div className="d-flex align-items-center gap-2">
+                          <span className="text-muted" style={{ minWidth: 48 }}>{CHANNEL_LABELS[r.channel]}</span>
+                          <ResultBadge result={r.result} />
+                          <span className="text-muted ms-auto" style={{ fontSize: "0.72rem", whiteSpace: "nowrap" }}>{relativeTime(r.createdAt)}</span>
+                        </div>
+                        {r.transcript && (
+                          <div className="text-muted mt-1 ps-1" style={{ cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: expandedReach === r.id ? "normal" : "nowrap" }}
+                            onClick={() => setExpandedReach(expandedReach === r.id ? null : r.id)}>
+                            {r.transcript}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+        </div>
 
-          {/* Reach history */}
-          {reaches.length > 0 && (
-            <div className="card mb-3">
-              <div className="card-body">
-                <h6 className="card-title mb-3">Reach history</h6>
-                <div className="d-flex flex-column gap-2">
-                  {reaches.map((r) => (
-                    <div key={r.id} style={{ fontSize: "0.83rem" }}>
-                      <div className="d-flex align-items-center gap-2">
-                        <span className="text-muted" style={{ minWidth: 52 }}>{CHANNEL_LABELS[r.channel]}</span>
-                        <ResultBadge result={r.result} />
-                        <span className="text-muted ms-auto" style={{ fontSize: "0.75rem", whiteSpace: "nowrap" }}>
-                          {relativeTime(r.createdAt)}
-                        </span>
-                      </div>
-                      {r.transcript && (
-                        <div
-                          className="text-muted mt-1 ps-1"
-                          style={{ cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: expandedReach === r.id ? "normal" : "nowrap" }}
-                          onClick={() => setExpandedReach(expandedReach === r.id ? null : r.id)}
-                        >
-                          {r.transcript}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Outreach message */}
-          <div className="card">
-            <div className="card-body">
+        {/* Right 60% — outreach message */}
+        <div className="col-md-7">
+          <div className="card h-100">
+            <div className="card-body d-flex flex-column">
               <h6 className="card-title mb-3">Outreach message</h6>
               {message ? (
                 <>
                   <textarea
-                    className="form-control mb-2"
-                    rows={8}
+                    className="form-control flex-grow-1 mb-2"
                     value={message}
                     onChange={(e) => { setMessage(e.target.value); setMessageDirty(true); }}
-                    style={{ fontSize: "0.88rem", resize: "vertical" }}
+                    style={{ fontSize: "0.88rem", resize: "none", minHeight: 240 }}
                   />
                   <div className="d-flex gap-2">
                     <button className={`btn btn-sm ${copied ? "btn-success" : "btn-primary"}`} onClick={copyMessage}>
@@ -444,8 +282,114 @@ export default function LeadPage() {
               )}
             </div>
           </div>
-
         </div>
+      </div>
+
+      {/* ── Reference row: Contact · Fit · Maps · Business ── */}
+      <div className="row g-3">
+
+        <div className="col-md-3">
+          <div className="card h-100">
+            <div className="card-body">
+              <h6 className="card-title mb-3">Contact</h6>
+              {contacts.length === 0
+                ? <p className="text-muted mb-0" style={{ fontSize: "0.85rem" }}>No contact info found.</p>
+                : (
+                  <div className="d-flex flex-column gap-2">
+                    {contacts.map((c) => (
+                      <div key={c.label} style={{ fontSize: "0.85rem" }}>
+                        <div className="text-muted" style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.03em" }}>{c.label}</div>
+                        <a href={c.href} target="_blank" rel="noopener noreferrer" className="text-break">{c.value}</a>
+                      </div>
+                    ))}
+                  </div>
+                )
+              }
+            </div>
+          </div>
+        </div>
+
+        <div className="col-md-3">
+          <div className="card h-100">
+            <div className="card-body">
+              <h6 className="card-title mb-3">Fit</h6>
+              {lead.icpFitReason
+                ? <p className="mb-0" style={{ fontSize: "0.85rem" }}>{lead.icpFitReason}</p>
+                : <p className="text-muted mb-0" style={{ fontSize: "0.85rem" }}>No score yet.</p>
+              }
+            </div>
+          </div>
+        </div>
+
+        <div className="col-md-3">
+          <div className="card h-100">
+            <div className="card-body">
+              <h6 className="card-title mb-3">Google Maps</h6>
+              {!lead.lastMapsSyncAt
+                ? <p className="text-muted mb-0" style={{ fontSize: "0.85rem" }}>Not enriched yet.</p>
+                : (
+                  <div style={{ fontSize: "0.85rem" }}>
+                    {lead.reviewCount != null && (
+                      <div className="mb-1"><strong>{lead.reviewCount}</strong> reviews{lead.reviewAvg != null && <> · <strong>{lead.reviewAvg}</strong> avg</>}</div>
+                    )}
+                    {lead.photoCount != null && <div className="mb-1">{lead.photoCount} photos</div>}
+                    {lead.ownerClaimed != null && (
+                      <div className="mb-1">
+                        {lead.ownerClaimed ? "Owner claimed" : "Unclaimed"}
+                        {lead.ownerResponseRate != null && <> · {Math.round(lead.ownerResponseRate * 100)}% response</>}
+                      </div>
+                    )}
+                    {lead.hoursText && <div className="text-muted mt-1">{lead.hoursText}</div>}
+                    {lead.attributes?.length > 0 && (
+                      <div className="d-flex flex-wrap gap-1 mt-2">
+                        {lead.attributes.map((a) => (
+                          <span key={a} className="badge bg-light text-dark border" style={{ fontSize: "0.7rem" }}>{a}</span>
+                        ))}
+                      </div>
+                    )}
+                    {Array.isArray(lead.reviewSamples) && lead.reviewSamples.length > 0 && (
+                      <details className="mt-2">
+                        <summary className="text-muted" style={{ cursor: "pointer", fontSize: "0.8rem" }}>
+                          Reviews ({lead.reviewSamples.length})
+                        </summary>
+                        <div className="mt-2 d-flex flex-column gap-2">
+                          {lead.reviewSamples.map((r, i) => (
+                            <div key={i} className="border-start ps-2" style={{ borderColor: "#e5e7eb" }}>
+                              <div className="text-muted" style={{ fontSize: "0.72rem" }}>
+                                {r.author || "Anonymous"}{r.rating ? ` · ${r.rating}/5` : ""}
+                              </div>
+                              <div style={{ fontSize: "0.82rem" }}>{r.text}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                )
+              }
+            </div>
+          </div>
+        </div>
+
+        <div className="col-md-3">
+          <div className="card h-100">
+            <div className="card-body">
+              <h6 className="card-title mb-3">Business</h6>
+              {lead.description && <p style={{ fontSize: "0.85rem" }} className="mb-2">{lead.description}</p>}
+              {lead.keywords?.length > 0 && (
+                <div className="d-flex flex-wrap gap-1">
+                  {lead.keywords.map((k) => (
+                    <span key={k} className="badge bg-light text-dark border" style={{ fontSize: "0.72rem" }}>{k}</span>
+                  ))}
+                </div>
+              )}
+              {!lead.description && !lead.keywords?.length && (
+                <p className="text-muted mb-0" style={{ fontSize: "0.85rem" }}>No details yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
@@ -454,60 +398,42 @@ export default function LeadPage() {
 // ── Helpers ──
 
 function relativeTime(iso) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (m < 1) return "just now";
   if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 
 function ResultBadge({ result }) {
   const colors = {
-    POSITIVE: "bg-success text-white",
-    FOLLOW_UP_REQUESTED: "bg-warning text-dark",
-    NOT_NOW: "bg-warning text-dark",
-    NEGATIVE: "bg-danger text-white",
-    DO_NOT_CONTACT: "bg-danger text-white",
+    POSITIVE: "bg-success text-white", FOLLOW_UP_REQUESTED: "bg-warning text-dark",
+    NOT_NOW: "bg-warning text-dark", NEGATIVE: "bg-danger text-white", DO_NOT_CONTACT: "bg-danger text-white",
   };
-  const cls = colors[result] || "bg-light text-dark border";
-  return (
-    <span className={`badge ${cls}`} style={{ fontSize: "0.72rem" }}>
-      {RESULT_LABELS[result] || result}
-    </span>
-  );
+  return <span className={`badge ${colors[result] || "bg-light text-dark border"}`} style={{ fontSize: "0.7rem" }}>{RESULT_LABELS[result] || result}</span>;
 }
 
 function WebsiteQualityBadge({ score, reason }) {
   let cls = "bg-success text-white";
   if (score <= 3) cls = "bg-danger text-white";
   else if (score <= 6) cls = "bg-warning text-dark";
-  return (
-    <span className={`badge ${cls}`} title={reason || ""} style={{ cursor: "default" }}>
-      Web {score}/10
-    </span>
-  );
+  return <span className={`badge ${cls}`} title={reason || ""} style={{ cursor: "default" }}>Web {score}/10</span>;
 }
 
 function FitBadge({ score }) {
-  let cls = "bg-secondary";
-  if (score >= 8) cls = "bg-success";
-  else if (score >= 6) cls = "bg-primary";
-  else if (score >= 4) cls = "bg-warning text-dark";
-  else cls = "bg-danger";
-  return <span className={`badge ${cls}`}>Fit {score}/10</span>;
+  let bg = "#6b7280", color = "#fff";
+  if (score >= 8)      { bg = "#16a34a"; }
+  else if (score >= 6) { bg = "#2563eb"; }
+  else if (score >= 4) { bg = "#f59e0b"; color = "#1c1917"; }
+  else                 { bg = "#dc2626"; }
+  return <span style={{ background: bg, color, borderRadius: 4, padding: "2px 8px", fontSize: "0.78rem", fontWeight: 600 }}>Fit {score}/10</span>;
 }
 
 function LeadStatusBadge({ status }) {
   const map = {
-    DISCOVERED: "bg-light text-dark border",
-    ENRICHED:   "bg-light text-dark border",
-    QUALIFIED:  "bg-info text-dark",
-    QUEUED:     "bg-primary",
-    CONTACTED:  "bg-success",
-    ARCHIVED:   "bg-secondary",
+    DISCOVERED: "bg-light text-dark border", ENRICHED: "bg-light text-dark border",
+    QUALIFIED: "bg-info text-dark", QUEUED: "bg-primary", CONTACTED: "bg-success", ARCHIVED: "bg-secondary",
   };
   return <span className={`badge ${map[status] || "bg-secondary"}`}>{status}</span>;
 }

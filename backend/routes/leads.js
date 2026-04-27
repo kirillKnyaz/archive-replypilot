@@ -118,6 +118,51 @@ router.post('/from-maps', async (req, res) => {
   }
 });
 
+// GET /action-queue — leads that need attention today
+router.get('/action-queue', async (req, res) => {
+  const userId = req.user.userId;
+  const { computeNextFollowUp } = require('../service/nextAction');
+  const now = new Date();
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+
+  const leads = await prisma.lead.findMany({
+    where: {
+      userId,
+      status: { notIn: ['ARCHIVED'] },
+      OR: [
+        { nextFollowUpAt: { lte: endOfToday } },
+        { status: 'QUALIFIED', followUpCount: 0 },
+      ],
+    },
+    include: {
+      campaign: { select: { id: true, name: true } },
+      reaches: { orderBy: { createdAt: 'desc' }, take: 1 },
+    },
+    orderBy: { nextFollowUpAt: 'asc' },
+  });
+
+  const withAction = leads.map((lead) => {
+    const latestReach = lead.reaches[0];
+    let suggestedAction = lead.followUpCount === 0 ? 'Make first contact' : 'Follow up';
+    if (latestReach) {
+      const { suggestedAction: sa } = computeNextFollowUp({
+        channel: latestReach.channel,
+        result: latestReach.result,
+        reachCount: lead.followUpCount,
+      });
+      if (sa) suggestedAction = sa;
+    }
+    return { ...lead, suggestedAction };
+  });
+
+  const overdue  = withAction.filter(l => l.nextFollowUpAt && new Date(l.nextFollowUpAt) < now);
+  const dueToday = withAction.filter(l => l.nextFollowUpAt && new Date(l.nextFollowUpAt) >= now && new Date(l.nextFollowUpAt) <= endOfToday);
+  const newLeads = withAction.filter(l => !l.nextFollowUpAt && l.followUpCount === 0);
+
+  res.json({ overdue, dueToday, newLeads, total: leads.length });
+});
+
 router.get('/:id/enrichmentLog/:goal', async (req, res) => {
   const leadId = req.params.id;
   const goal = req.params.goal;

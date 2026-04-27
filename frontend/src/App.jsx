@@ -14,6 +14,7 @@ import CampaignSetupPage from './pages/campaigns/CampaignSetupPage';
 import CampaignDetailPage from './pages/campaigns/CampaignDetailPage';
 import CampaignConfigPage from './pages/campaigns/CampaignConfigPage';
 import LeadPage from './pages/leads/LeadPage';
+import ActionQueuePage from './pages/leads/ActionQueuePage';
 import PricingPage from './pages/billing/PricingPage';
 import BillingPage from './pages/billing/BillingPage';
 import SettingsPage from './pages/settings/SettingsPage';
@@ -50,6 +51,7 @@ export default function App() {
                 <Route path="/campaigns/:id/setup" element={<ProtectedRoute><CampaignSetupPage /></ProtectedRoute>} />
                 <Route path="/campaigns/:id/config" element={<ProtectedRoute><CampaignConfigPage /></ProtectedRoute>} />
                 <Route path="/leads/:id" element={<ProtectedRoute><LeadPage /></ProtectedRoute>} />
+                <Route path="/queue" element={<ProtectedRoute><ActionQueuePage /></ProtectedRoute>} />
 
                 <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                 <Route path="/pricing" element={<ProtectedRoute><PricingPage /></ProtectedRoute>} />

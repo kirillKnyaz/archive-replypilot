@@ -2,7 +2,7 @@
 
 A focused UI sprint running parallel to the feature build calendar. Covers table usability, URL-persisted filters, LeadPage hierarchy, Day 8 reach log, and a visual sharpness pass.
 
-**Status:** Not started.
+**Status:** Steps 1-4 complete. Step 5 (rename) deferred.
 
 ---
 
@@ -167,8 +167,8 @@ Name TBD. When decided:
 
 | Step | What | Status |
 |------|------|--------|
-| 1 | URL-persisted filters | — |
-| 2 | Table action cleanup | — |
-| 3 | LeadPage layout + reach log (Day 8) | — |
-| 4 | Visual sharpness pass | — |
+| 1 | URL-persisted filters | ✓ DONE |
+| 2 | Table action cleanup | ✓ DONE |
+| 3 | LeadPage layout + reach log (Day 8) | ✓ DONE |
+| 4 | Visual sharpness pass | ✓ DONE |
 | 5 | App rename | deferred |
